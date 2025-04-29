@@ -1,0 +1,750 @@
+---
+title: 'Behavior log data QA/QC: false killer whales'
+author: "Michaela A. Kratofil"
+date: "2/17/2025"
+output: word_document
+---
+
+## Overview
+
+This document steps through the QA/QC process of behavior log data from SPLASH satellite tags, using false killer whales as an example. There are a number of things to check to make sure that the data is valid before moving on to formal analysis. These steps were informed from previous work ([Baird et al. (2019)](https://www.cascadiaresearch.org/files/publications/Bairdetal2019_Hatteras.pdf), [Shearer et al. 2019](https://royalsocietypublishing.org/doi/10.1098/rsos.181728)) and discussions with Wildlife Computers and Will Cioffi. 
+
+The first step is to read in the behavior logs for all tags you're working with. I created a function to read in files and format them, because some false killer whale tags were programmed in HST, but you could easily do this by reading each file individually, formatting, and then combining them into a single dataframe.  
+
+```{r setup, include=FALSE, message=F, warning=F}
+## load libraries
+library(tidyverse)
+library(here)
+library(knitr)
+
+## read in behavior logs ## -------------------------------------------------- ##
+list <- list.files(here("data","behavior"), pattern = "*-Behavior*.csv", recursive = TRUE, full.names = TRUE)
+list
+
+## loop through the list of files, read in, format datetime, and store in a list
+bls <- list()
+for(i in 1:length(list)){
+  #i = 1
+  bl <- read.csv(list[[i]])
+  
+  # FKW-specific: fix formatting of duration cols if PcTag030 or PcTag032
+  if(bl$DeployID[1] %in% c("PcTag030","PcTag032")){
+    bl$DurationMax <- as.numeric(bl$DurationMax)
+    bl$DurationMin <- as.numeric(bl$DurationMin)
+  }
+  
+  # FKW-specific: fix deploy ID column for PcTag092 and P09
+  if(bl$DeployID[1] == 253681){
+    bl$DeployID <- "PcTag092"
+  } else if(bl$DeployID[1] == "HIPcTag2403"){
+    bl$DeployID <- "PcTagP09"
+  }
+  
+  # get the time zones per tag 
+  if(bl$DeployID[1] %in% c("PcTag035","PcTag037")){
+    TZ = "Pacific/Honolulu"
+  } else{
+    TZ = "UTC"
+  }
+  
+  # format the Start and End times using the tag's programmed time zone 
+  bl$start_form <-  as.POSIXct(gsub("\\.5", "", bl$Start), format = "%H:%M:%S %d-%b-%Y", tz = TZ)
+  bl$end_form   <-  as.POSIXct(gsub("\\.5", "", bl$End), format = "%H:%M:%S %d-%b-%Y", tz = TZ)
+  
+  # create universal UTC start/end columns 
+  bl$start_utc <- as.POSIXct(format(bl$start_form, tz="UTC"), tz="UTC")
+  bl$end_utc <- as.POSIXct(format(bl$end_form, tz="UTC"), tz="UTC")
+  
+  # select relevant columns (remove irrelevant ones)
+  sub <- bl %>%
+    select(DeployID, Ptt, DepthSensor, Count, Start, End, What, Number, Shape,
+           DepthMin, DepthMax, DurationMin, DurationMax, Shallow, Deep, start_utc,
+           end_utc)
+  
+  # return
+  bls[[i]] <- sub
+  
+}
+
+## bind back to dataframe 
+tags <- bind_rows(bls)
+
+## read in the deploy and status message file info 
+dps <- read.csv(here("data","pc_splash_deploy_status_datetimes.csv"))
+
+## Format columns
+dps$deploy_utc <- as.POSIXct(dps$deploy_utc, tz = "UTC")
+dps$last_status_utc <- as.POSIXct(dps$last_status_utc, tz = "UTC")
+
+```
+
+## Overlapping messages 
+
+The first thing we are going to do is check the "Message" records for any overlapping messages. Messages contain the behavior logs, or the dive/surface records. A single "Message" row in the -Behavior file summarizes the information for the dives/surfaces following that record, until the next Message block. Sometimes, corrupt messages can be erroneously retained in the behavior log. Usually these are pretty obvious: a message block that extends a really long time, often several days (or weeks) over the next message block. These potentially corrupt messages usually contain dive/surface records with extreme values. The following code creates a function to identify gaps (positive gaps in time from gaps in transmissions) and overlaps (negative gaps) between message blocks. It flags overlapping messages over 60 seconds (within a couple of mins or so is fine), so that you can then review those cases in detail to decide whether the data should be removed or not. If any messages should be removed, then you remove all dives/surfaces within that message (not just the ones with extreme values). 
+
+```{r message overlaps, echo=F, warning=FALSE}
+
+## create function to identify overlapping messages, and flag those greater than
+## 60 seconds or so. extended overlapping satellite messages are likely a result
+## of a corrupt message being erroneously retained 
+msg_overlaps <- function(tag){
+  
+  # for testing
+  #tag <- filter(tags, DeployID == "PcTag030")
+  
+  # first create a vector to index and id message blocks 
+  ms <- tag$What == "Message"
+  if(all(!ms)) stop("missing message rows")
+  nmsg <- length(ms)
+  msgid <- cumsum(ms)
+  
+  # add message ID column to behavior log 
+  tag$msg_id <- msgid
+  
+  # filter the messages
+  msg <- filter(tag, What == "Message")
+  
+  # calculate the time between message blocks
+  msg$t.diff <- rep(NA,nrow(msg))
+  for (i in 2:nrow(msg)){
+    msg$t.diff[i] <- difftime(msg$start_utc[i],msg$end_utc[i-1],units='secs')
+  }
+  
+  # identify overlaps to flag: -60 is our threshold, so anything greater should
+  # be flagged
+  msg$msg_overlap_flag <- rep(0,nrow(msg))
+  for (i in 2:nrow(msg)){
+    if (msg$t.diff[i] < -60){msg$msg_overlap_flag[i-1] <- 1} #if value is 1, there is am extended overlap b/t i-1 & i
+  }
+  print(paste0(msg$DeployID[1], " ", length(msg$msg_overlap_flag[msg$msg_overlap_flag == 1]),
+               " flagged message overlap"))
+  
+  # for those flagged, get the length of the overlap 
+  if(sum(msg$msg_overlap_flag) > 0){
+    overs <- filter(msg, t.diff < - 60)
+    for(i in 1:nrow(overs)){
+    print(paste0(msg$DeployID[1], ", overlap #", i, ": ", overs$t.diff[i], " seconds"))
+    }
+  }
+  
+  # add the flagged information in messages back to the entire behavior log, so that we 
+  # can get summary information on that flagged message to make note of and then remove it
+  # from further analyses 
+  tag <- left_join(tag, msg[,c("msg_id","msg_overlap_flag")], by = "msg_id")
+  
+  # filter out overlapping messages and summarize
+  if(length(tag$msg_overlap_flag[tag$msg_overlap_flag == 1]) > 0){
+    # filter
+    overlaps <- filter(tag, msg_overlap_flag == 1)
+    
+    # summarize
+    over_sum <- overlaps %>%
+      group_by(msg_id) %>%
+      filter(What != "Message") %>%
+      summarise(
+        start_msg = first(start_utc),
+        end_msg = last(end_utc),
+        max_depth = max(DepthMax, na.rm = T),
+        max_dur = max(DurationMax, na.rm = T)
+      )
+    
+    # print out basic info on results (alternatively, could save a csv file for this)
+    for(i in 1:nrow(over_sum)){
+      #i = 1
+      print(paste0(tag$DeployID[1], ": ", "overlap from ", over_sum$start_msg[i], " to ",
+                   over_sum$end_msg[i]))
+      print(paste0("maximum depth during this block: ", over_sum$max_depth[i]))
+      print(paste0("maximum duration during this block: ", over_sum$max_dur[i]))
+    }
+
+  } 
+  # return the tag dataframe that includes the flag 
+  return(tag)
+  
+}
+
+## Split the behavior dataframe by DeployID
+behavior_split <- split(tags, tags$DeployID)
+
+## Apply the message overlaps function to each subset, and then bind results back to 
+## a single dataframe 
+msg_overlaps_list <- map(behavior_split, msg_overlaps)
+msg_overlaps_df <- bind_rows(msg_overlaps_list)
+
+## if any message overlaps greater than 60 seconds were identified, inspect these overlaps
+## individually to decide whether they are extreme enough and likely due to a corrupt message 
+## being erroneously retained. 
+
+## EXAMPLE ## ---------------------------------------------------------------- ##
+## index messages to delete after detailed individual-level assessment.
+
+# bill: message after flagged overlap (see notes below code)
+# jay: remove the message that was flagged
+# michael: remove the message that was flagged
+# ping: remove the message that was flagged
+# msg_overlaps_df <- msg_overlaps_df %>%
+#   mutate(
+#     delete = ifelse(DeployID == "Bill" & msg_id == 75, 0, msg_overlap_flag),
+#     delete = ifelse(DeployID == "Bill" & msg_id == 76, 1, delete)
+#   )
+
+# check
+#delete_rows <- filter(msg_overlaps_df, delete == 1)
+
+# remove those corrupt messages
+#behavior_noncrrpt <- filter(msg_overlaps_df, delete == 0)
+
+```
+For this dataset, there are a handful of tags that have message overlaps > 60 seconds. After a more detailed inspection into these situations, they are all not extreme overlaps (within ~2 minutes) and the data in the message blocks are reasonable. Therefore, because the duration data are accurate and data seem normal, we will retain all message blocks. 
+
+Example code is provided above (commented out) if you do have more obvious corrupt/erroneous message blocks and need to remove them from the dataset. 
+
+## Cleaning: pre-deployment and post-last status messages
+
+Now we will address any records that occurred before the deployment datetime and remove any records after the last good (CRC-checked) status message. Records that occurred before the deployment datetime should be surface records, and where applicable, we will replace the start time of the surface record with the deployment datetime. If this step applies, then the code will also correct the duration min and max estimates. We remove data after the last good status message to be conservative in only analyzing data that is likely free of pressure transducer failures. 
+
+```{r qaqc, message=F, echo=F, warning=FALSE}
+
+## create function to format data, and correct records pre-deployment and post last 
+## CRC-checked status messages
+qc <- function(tag){
+  
+  # for testing
+  #tag <- filter(tags, DeployID == "PcTag074")
+
+  # Get rid of rows with 'Message' - only keep those that are 'Dive' or 'Surface'
+  tag <- tag[which(tag$What %in% c("Dive","Surface")),]
+  print(paste0(tag$DeployID[1], " ", nrow(tag), " original"))
+  
+  # get the deployment info for the tag 
+  tag_dps <- filter(dps, DeployID == tag$DeployID[1])
+  
+  # correct the start time of any records before the tag was deployed. will also
+  # need to update the duration estimates for this first record
+  if(tag$start_utc[1] < tag_dps$deploy_utc[1]){
+    # time difference between new start and old start
+    start_diff <- as.numeric(difftime(tag_dps$deploy_utc[1],tag$start_utc[1], units = "secs"))
+    # correct start time and duration min and max estimates
+    tag$start_utc[1] <- tag_dps$deploy_utc[1]
+    tag$DurationMin[1] <- tag$DurationMin[1] - start_diff
+    tag$DurationMax[1] <- tag$DurationMax[1] - start_diff
+    print(paste0(tag$DeployID[1], " ", nrow(tag), " start time corrected"))
+  }
+  
+  # remove any rows that transmitted after the last CRC-checked status message
+  if(tag$end_utc[nrow(tag)] > tag_dps$last_status_utc[1]){
+    tag <- filter(tag, end_utc <= tag_dps$last_status_utc[1])
+    print(paste0(tag$DeployID[1], " ", nrow(tag), " within-status"))
+  }
+  
+  return(tag)
+}
+
+## Apply the qc function to each subset (note: function must return a dataframe, which in this case it does)
+behavior_noncrrpt_split <- split(msg_overlaps_df, msg_overlaps_df$DeployID)
+result_list <- map(behavior_noncrrpt_split, qc)
+
+## Combine the results back into a single data frame
+behavior_qc <- bind_rows(result_list)
+
+## review the tags that needed start times corrected 
+p74 <- filter(behavior_qc, DeployID == "PcTag074")
+p90 <- filter(behavior_qc, DeployID == "PcTag090")
+p92 <- filter(behavior_qc, DeployID == "PcTag092")
+
+
+```
+
+
+## Checking for tag transducer failures
+
+Assessment for tag pressure transducer failures here follows what was reported in [Baird et al. (2019)](https://www.cascadiaresearch.org/files/publications/Bairdetal2019_Hatteras.pdf). 
+
+For all deployments, -Status.csv files were assessed for indication of pressure transducer failure. This was done by checking values recorded in the 'Depth' column, which represents the value immediately recorded before location transmission. As stated in [Baird et al. (2019)](https://www.cascadiaresearch.org/files/publications/Bairdetal2019_Hatteras.pdf), values exceeding +/- 10 indicate potential transducer failure. The ZeroDepthOffset value was also checked and this should be within +/- 9 m. NOTE: we only assess CRC-checked status values; any questionable values that were NOT CRC-checked can be ignored (per Greg Schorr). 
+
+### Maximum depth values recorded in -Status files - ONLY report CRC-checked values:
+```{r status review, message=F, echo=F, warning=FALSE}
+## read in status files 
+status_list <- list.files(here("data","behavior"), pattern = "*-Status*.csv", recursive = TRUE, full.names = TRUE)
+#status_list
+
+## loop through the list of files, read in, format datetime, and store in a list
+statuses <- list()
+for(i in 1:length(status_list)){
+  #i = 4
+  st <- read.csv(status_list[[i]])
+  
+  # FKW-specific: fix deploy ID column for PcTag092 and P09
+  if(st$DeployID[1] == 253681){
+    st$DeployID <- "PcTag092"
+  } else if(st$DeployID[1] == "HIPcTag2403"){
+    st$DeployID <- "PcTagP09"
+  }
+  
+  # format the Start and End times using the tag's programmed time zone 
+  st$Received <-  as.POSIXct(st$Received, format = "%H:%M:%S %d-%b-%Y", tz = "UTC")
+  
+  # get the deployment time for the tag, and remove any status messages prior to
+  # the start
+  dp <- filter(dps, DeployID == st$DeployID[1])
+  st_dp <- filter(st, Received >= dp$deploy_utc)
+  
+  # filter CRC-checked status messages 
+  crc <- filter(st_dp, Type == "CRC")
+  
+  # create a dataframe that has DeployID, Ptt, and max Depth and max ZeroDepthOffset
+  # values that we can then report in a table 
+  crc_table <- data.frame(
+    DeployID = crc$DeployID[1],
+    PTT = crc$Ptt[1],
+    maxDepth = max(crc$Depth, na.rm = T),
+    maxZeroDepthOffset = max(crc$ZeroDepthOffset, na.rm = T)
+  )
+  
+  # status files that don't have any Depth or ZeroDepthOffset values will return
+  # Inf, so make those NAs
+  crc_table <- crc_table %>%
+    mutate(
+      maxDepth = ifelse(is.infinite(maxDepth),NA,maxDepth),
+      maxZeroDepthOffset = ifelse(is.infinite(maxZeroDepthOffset),NA,maxZeroDepthOffset)
+    )
+  
+  # store the table in the list 
+  statuses[[i]] <- crc_table
+  
+}
+
+## bind back to dataframe 
+status_table <- bind_rows(statuses)
+
+
+```
+
+```{r, results='asis', echo=F}
+kable(status_table)
+```
+
+All tag files meet acceptable levels of depth and zero-depth-max values in their status files, so no need to remove any records based on status file readings. 
+
+## Ascent/descent rates
+Calculate estimated dive ascent/descent rates following [Baird et al. (2019)](https://www.cascadiaresearch.org/files/publications/Bairdetal2019_Hatteras.pdf). Dive ascent/descent rates were calculated as: 2*Dive depth (avg., meters) / Dive duration (seconds). While this is a coarse estimation of ascent/descent rates, extreme values could indicate the presence of some tag malfunctioning. The highest ascent/descent rate measured from a time-depth-recorder on a false killer whale was 5.8 meters per second, and thus we use this to gauge reasonable versus extreme values. 
+
+```{r, message=F, echo=F, warning=FALSE}
+
+## calculations 
+all_dives <- filter(behavior_qc, What == "Dive") # filter out message and surface records
+all_dives$DepthAvg <- (all_dives$DepthMin + all_dives$DepthMax)/2
+all_dives$DurationAvg <- (all_dives$DurationMin + all_dives$DurationMax)/2
+all_dives$DurAvgMin <- all_dives$DurationAvg/60
+all_dives$rates <- (2*all_dives$DepthAvg)/all_dives$DurationAvg
+
+## make summary table
+dive_n <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(n_Dives = n())
+
+depth_avg <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(avg_depth = round(mean(DepthAvg),1))
+
+depth_min <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(min_depth = round(min(DepthAvg),1))
+
+depth_max <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(max_depth = round(max(DepthAvg),1))
+
+dur_avg <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(avg_dur = round(mean(DurAvgMin),1))
+
+dur_min <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(min_dur = round(min(DurAvgMin),1))
+
+dur_max <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(max_dur = round(max(DurAvgMin),1))
+
+rate_avg <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(avg_rate = round(mean(rates),2))
+
+rate_min <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(min_rate = round(min(rates),2))
+
+rate_max <- all_dives %>%
+  group_by(DeployID) %>%
+  summarise(max_rate = round(max(rates),2))
+
+dive_sum <- left_join(dive_n, depth_avg, by = "DeployID") %>%
+  left_join(depth_min, by = "DeployID") %>%
+  left_join(depth_max, by = "DeployID") %>%
+  left_join(dur_avg, by = "DeployID") %>%
+  left_join(dur_min, by = "DeployID") %>%
+  left_join(dur_max, by = "DeployID") %>%
+  left_join(rate_avg, by = "DeployID") %>%
+  left_join(rate_min, by = "DeployID") %>%
+  left_join(rate_max, by = "DeployID")
+
+## print table
+kable(dive_sum)
+
+```
+
+All tags have ascent/descent rates within a reasonable range, and there don't appear to be any extreme depth or duration values. 
+
+## Summary plots
+Make simple plots of dive depth, duration, and ascent/descent rates to identify any other outliers in the data. 
+
+### Dive depth vs duration
+```{r, echo=F, fig.width=8, fig.height=6}
+## create plot theme
+plot_theme <- function() {
+  theme_bw() +
+    theme(axis.text = element_text(color = 'black'),
+          axis.title = element_text(color = 'black', face = 'bold'))
+}
+
+## plot
+ggplot(all_dives, aes(x = DurAvgMin, y = DepthAvg, color = DeployID)) +
+  geom_point() +
+  plot_theme() +
+  scale_y_continuous(breaks = round(seq(0, max(all_dives$DepthAvg), by = 50), 0),
+                     expand = c(0,10)) +
+  scale_x_continuous(breaks = round(seq(0, max(all_dives$DurAvgMin), by = 2), 0),
+                     expand = c(0,1)) +
+  scale_color_viridis_d() +
+  ylab("Depth (average, meters)") +
+  xlab("Duration (average, minutes)")
+```
+
+We can see that dive duration generally increases with dive depth, and there are no clear outliers that we should investigate. 
+
+### Dive shape vs dive duration
+```{r, warning=F, message=F, echo=F,fig.width=8, fig.height=6}
+## plot
+ggplot(all_dives, aes(x = DurAvgMin, y = DepthAvg, fill = Shape)) +
+  geom_point(shape = 21, color = "black", alpha = 0.4) +
+  plot_theme() +
+  scale_y_continuous(breaks = round(seq(0, max(all_dives$DepthAvg), by = 50), 0),
+                     expand = c(0,10)) +
+  scale_x_continuous(breaks = round(seq(0, max(all_dives$DurAvgMin), by = 2), 0),
+                     expand = c(0,1)) +
+  scale_fill_brewer(palette = "Set1") +
+  ylab("Depth (average, meters)") +
+  xlab("Duration (average, minutes)")
+```
+
+### Dive depth vs ascent/descent rates 
+```{r, echo = F,fig.width=8, fig.height=6}
+## plot
+ggplot(all_dives, aes(x = rates, y = DepthAvg, color = DeployID)) +
+  geom_point() +
+  plot_theme() +
+  scale_y_continuous(breaks = round(seq(0, max(all_dives$DepthAvg), by = 50), 0),
+                     expand = c(0,15)) +
+  scale_x_continuous(breaks = round(seq(0, max(all_dives$DurAvgMin), by = .5), 1),
+                     expand = c(0,.1)) +
+  scale_color_viridis_d() +
+  ylab("Depth (average, meters)") +
+  xlab("Ascent/descent rate (m/sec)")
+```
+
+### Dive duration vs ascent/descent rates
+```{r, echo=F,fig.width=8, fig.height=6}
+ggplot(all_dives, aes(x = rates, y = DurAvgMin, color = DeployID)) +
+  geom_point() +
+  plot_theme() +
+  scale_y_continuous(breaks = round(seq(0, max(all_dives$DurAvgMin), by = 2), 0),
+                     expand = c(0,1)) +
+  scale_x_continuous(breaks = round(seq(0, max(all_dives$rates), by = .5), 1),
+                     expand = c(0,.1)) +
+  scale_color_viridis_d() +
+  ylab("Duration (average, minutes)") +
+  xlab("Ascent/descent rate (m/sec)")
+
+```
+
+## Review time series data 
+
+Some tags were programmed to transmit time series data, which can be found in the -Series and -SeriesRange files in applicable tag folders. These data report the depth of the animal at the programmed sampling interval (75, 150, 300, 450, 600 seconds). For more recent deployments, time series data is programmed to transmit on a coarser duty cycle as to provide a means for QA/QC of the behavior log data, and not to obtain a dive record over the entire deployment. Because time series data is collected at a finer temporal scale than the behavior log data, we can use it to check for any potential tag malfunctions that may have occurred. Specifically, if there are obvious discrepancies between the two data streams at any given point, this could be a result of some corruption or malfunction, and we can remove the behavior log data during these periods. See the protocol word document for an example on a killer whale deployment from Greg Schorr. 
+
+This step relies on plotting functions that are stored in a separate R file, so we will load those functions first. The functions will make plots of small time periods (easier to see) and save those plots to a specific folder for each tag. To save space in this markdown document, I did not include those plots here; some tags may be longer and/or have a lot of time series/behavior log data, and thus there will be a lot of plots. After running the code below, review those plots in detail to determine whether any data should be removed. 
+
+NOTE: in this markdown file, I have set eval=F to not run this code, so that it doesn't run everytime I knit the document (plots are already generated for these tags).
+
+```{r time series, eval=F, echo=F}
+## load functions for plotting behavior log and time series data 
+source(here("code","data_processing","behavlog_timeseries_plot_functions.R"))
+
+## additional packages needed
+library(gridExtra)
+library(scales)
+library(ggpubr)
+library(stringr)
+
+## get the list of series files 
+series_list <- list.files(here("data","behavior"), pattern = "*-Series*.csv", recursive = TRUE, full.names = TRUE)
+series_list
+
+## get a vector of length of series tags
+series_tags <- length(series_list)
+
+## for each tag, read in the series file, format the datetime, identify the sampling
+## interval, and make plots 
+for(i in 1:series_tags){
+  #i = 1
+  # read in the ith series file 
+  ser <- read.csv(series_list[[i]])
+  
+  # get the deployID from the file 
+  # FKW-specific: fix deploy ID column for PcTag092 and P09
+  if(ser$DeployID[1] == 253681){
+    ser$DeployID <- "PcTag092"
+  } else if(ser$DeployID[1] == "HIPcTag2403"){
+    ser$DeployID <- "PcTagP09"
+  }
+  
+  # create the folder to store the plots in
+  plot_folder <- paste0("outputs/time_series_plots/",ser$DeployID[1])
+  
+  # set the time zone of the behavior file and that of the plot (whatever you want)
+  if(ser$DeployID[1] %in% c("PcTag035","PcTag037")){
+    fileTZ = "Pacific/Honolulu"
+  } else{
+    fileTZ = "UTC"
+  }
+  plotTZ <- "Pacific/Honolulu"
+  
+  # add datetime to timeseries
+  ser$date_time <- as.POSIXct(paste0(ser$Day, " ", ser$Time), format = "%d-%b-%Y %H:%M:%S", tz = fileTZ)
+  
+  # identify the sampling interval for the tag's series data. using the t.diff
+  # between the first and second row should be good for this; t.diff may be larger
+  # when there are gaps in the record (normal), so using the max would be 
+  # inappropriate
+  ser$t.diff <- rep(NA,nrow(ser))
+  for (i in 2:nrow(ser)){
+    ser$t.diff[i] <- difftime(ser$date_time[i],ser$date_time[i-1],units='secs')
+  }
+  samp_interval <- ser$t.diff[2]
+  
+  # now, for plotting: make function to get segments of data based on gaps between time series records 
+  get_segments <- function(x, gap = 4, time_unit = "days"){
+    dt <- diff(x) %>% `units<-`(time_unit)
+    time_diff <- c(0, dt)
+    seg_id <- (time_diff >= gap) %>% {cumsum(.)+1}
+    return(seg_id)
+  }
+    
+  # get segments: identify gaps based on the series sampling interval. this means
+  # that we should consider a gap something larger than the sampling interval;
+  # we'll add 30 seconds to the sampling interval to accomplish this. 
+  # NOTE: the unit of the segments function is days (idk why, but when I change 
+  # it to seconds it doesn't work), so we'll need to convert the interval seconds to days 
+  gap_interval <- (samp_interval + 30)/60/60/24
+  ser$seg_id <- get_segments(ser$date_time, gap = gap_interval)
+
+  # break each segment up into 4-hour chunks: note, because each segment is unlikely
+  # to break up into an even number of 4-hour chunks, there will likely be some plots
+  # that are shorter than 4-hours 
+  ser <- ser %>%
+    group_by(seg_id) %>%
+    dplyr::mutate(hr_id = paste(lubridate::date(date_time), ceiling(lubridate::hour(date_time) / 4), seg_id)
+                  %>% as.factor()) %>% ungroup(seg_id)
+
+  # finally, extract the behavior log data for the deployID corresponding to the 
+  # series file 
+  behav <- filter(tags, DeployID == ser$DeployID[1])
+  
+  # format the series as a dataframe (no tibble)
+  ser <- as.data.frame(ser)
+  
+  # now loop through each segment, and plot 4-hour chunks within each segment
+  for (c in levels(ser$hr_id)) {
+    
+    # for testing 
+    #c = "2010-10-15 5 1"
+    
+    # get the hour chunk and number of rows 
+    chunk <- filter(ser, hr_id == c)
+    n_chunk <- nrow(chunk)
+    
+    # get the first and last timestamps of the chunk
+    chunk_first <- strftime(chunk$date_time[1], tz = fileTZ, format = "%Y-%m-%d %H:%M:%S")
+    chunk_last <- strftime(chunk$date_time[n_chunk], tz = fileTZ, format = "%Y-%m-%d %H:%M:%S")
+    
+    # get the times in HST (if not already) for title
+    chunk_first_hst <- strftime(chunk$date_time[1], tz = "Pacific/Honolulu", format = "%Y-%m-%d %H:%M:%S")
+    chunk_last_hst <- strftime(chunk$date_time[n_chunk], tz = "Pacific/Honolulu", format = "%Y-%m-%d %H:%M:%S")
+    
+    # get dive plot metrics
+    max_depth <- round(max(behavior$DepthMax, na.rm = T), digits = -2) + 100
+    
+    # animal
+    animal <- first(chunk$DeployID)
+    
+    # make the behavior log plot using the chunk start/end times 
+    bl_plot <- bl_diveplot(behav, title = paste0(animal, " Behavior Log (", chunk_first_hst, " to ", chunk_last_hst, ")"),
+                           plotcolor = "deepskyblue4",
+                           depthlim = -(max_depth), 
+                           depths = c(seq(0,-(max_depth), by = -50)),
+                           depthlab = as.character(c(seq(0,-(max_depth), by = -50))),
+                           datebreaks = "1 hour", nights = NULL,
+                           datelim = as.POSIXct(c(chunk_first, chunk_last), tz = fileTZ),
+                           filetz = fileTZ, plottz = plotTZ,
+                           gaps = T,
+                           grid = F, lineweight = 1)
+    
+    #bl_plot
+    
+    # make the time series plot using the chunk start/end times 
+    ts_plot <- ts_diveplot(ser, title = paste0(animal, " Time Series (", chunk_first_hst, " to ", chunk_last_hst, ")"),
+                           plotcolor = "goldenrod",
+                          depthlim = -(max_depth),
+                       datebreaks = "1 hour", depths = c(seq(0,-(max_depth), by = -50)),
+                       depthlab = as.character(c(seq(0,-(max_depth), by = -50))),
+                       datelim = as.POSIXct(c(chunk_first, chunk_last), tz = fileTZ),
+                       filetz = fileTZ, plottz = plotTZ,
+                       grid = F, lineweight = 1)
+    #ts_plot
+    
+    # combine the plots 
+    comb <- ggarrange(bl_plot, ts_plot, ncol = 1, nrow = 2)
+    
+    
+    # save to plot folder 
+    seg_id <- first(chunk$seg_id) # segment id to save in file name
+    chunk_id <- c # chunk id to save in file name 
+    ggsave(plot = comb, 
+           filename = paste0(plot_folder, "/", animal,
+                             "_BehaviorLog_TimeSeries_Compare_seg", seg_id, "_period_", chunk_id, ".jpg"),
+           width = 10, height = 10, units = "in")
+    
+  }
+
+  
+}
+
+
+```
+
+After reviewing the time series vs behavior log plots, it appears the PcTag028 has one suspect time period where the dives reported by the time series datastream are impossible; looking at the behavior log, we don't see these values, so they are okay to retain. If we were using the time series data in analyses, then we would exclude this portion of the time series data. For context: Looking at the SeriesRange file, this particular time series message was only received once (Count column), and thus could be corrupt. Per Heather Baer (Wildlife Computers): when a message is received more than once, you can be confident there isn't any corruption, because the chance of the exact same corruption happening twice is slim. Example code for removing this data when applicable is below. 
+
+```{r, subset, message=F, echo=F, warning=FALSE}
+
+## PcTag028: small period in data where time series was impossible (potentially 
+## corrupt) and thus we should remove the behavior log data for that period -- ## 
+
+# define the time periods to filter
+# start_bad <- as.POSIXct("2010-11-20 02:00:00", tz = "UTC")
+# end_bad <- as.POSIXct("2010-11-20 04:00:00", tz = "UTC")
+# 
+# pc28_cut <- ts %>%
+#   filter(DeployID == "PcTag028") %>%
+#   filter(start_utc < start_bad | start_utc > end_bad)
+
+
+```
+
+
+## Identify minor gaps or overlapping dive/surface records within each tag
+After removing all outliers, now we can summarize basic information on gaps. The function will calculate gaps between dive/surface records in the behavior log, including positive gaps resulting from gaps in transmissions to satellites, and negative gaps representing overlaps between consecutive message blocks. Overlapping end/start times occurs when the end of one message block happens after the start of the next one; within 60 seconds or so, this is OK and (presumably) related to how the tag encodes the information (e.g., truncating seconds to save space). For general purposes, these overlaps are OK (e.g., Shearer et al. 2019 retained normal overlapping behavior logs).
+
+```{r run message gap qc function, include = FALSE}
+
+## create function to identify gaps between  
+## dive/surface records. positive gaps are simply gaps between satellite transmissions,
+## and negative gaps result from slight overlaps between adjacent message blocks
+record_gaps_qc <- function(tag){
+  
+  # calculate time differences from end of one dive to start of next 
+  tag$t.diff <- rep(NA,nrow(tag))
+  for (i in 2:nrow(tag)){
+    tag$t.diff[i] <- difftime(tag$start_utc[i],tag$end_utc[i-1],units='secs')
+  }
+  
+  # Flag data gaps (i.e., any t.diff greater than 0)
+  tag$data_gap_flag <- rep(0,nrow(tag))
+  for (i in 2:nrow(tag)){
+    if (tag$t.diff[i] > 0){tag$data_gap_flag[i] <- 1} #if value is 1, there is a data gap
+  }
+  
+  return(tag)
+}
+
+## Split the behavior dataframe by DeployID
+behavior_split2 <- split(behavior_qc, behavior_qc$DeployID)
+
+## Apply the function to each subset
+result_list2 <- map(behavior_split2, record_gaps_qc)
+
+## Combine the results back into a single data frame
+behavior_final <- bind_rows(result_list2)
+
+
+```
+
+
+## Summarize and save final data
+```{r summary table, message = F, echo = F}
+
+## first get the depth avgs and duration avgs for all data 
+behavior_final <- behavior_final %>%
+  mutate(
+    DepthAvg = if_else(What == "Dive", (DepthMin + DepthMax) / 2, NA_real_),
+    DurationAvg = (DurationMin + DurationMax) / 2
+  ) 
+
+## update summary table for behavior log data (both dives and surfaces)
+bl_sum_final <- behavior_final %>%
+  group_by(DeployID) %>%
+  summarise(BL_tracking_days = max(as.Date(end_utc)) - min(as.Date(start_utc)),
+            BL_data_days = round(sum(DurationAvg)/(60*60*24),2),
+            BL_data_coverage = round((BL_data_days/as.numeric(BL_tracking_days))*100, 1),
+            n_data_gaps = sum(data_gap_flag),
+            max_data_gap = max(t.diff, na.rm = T))
+            
+
+## print table
+kable(bl_sum_final)
+
+## summarize % of time at surface to include in the dive summary table 
+surf_sum <- filter(behavior_final, What == "Surface") %>%
+  group_by(DeployID) %>%
+  summarise(
+    surf_dur_days = sum(DurationAvg)/(60*60*24)
+  ) %>%
+  bind_cols(., bl_sum_final[,3]) %>%
+  mutate(
+    perc_time_surf = round((surf_dur_days/BL_data_days)*100,1)
+  )
+
+## Re-create summary table
+dive_sum_final <- behavior_final %>%
+  filter(What == "Dive") %>%
+  group_by(DeployID) %>%
+  summarise(
+            n_Dives = n(),
+            min_depth = round(min(DepthAvg),1),
+            avg_depth = round(mean(DepthAvg),1),
+            max_depth = round(max(DepthAvg),1),
+            min_dur = round(min(DurationAvg/60),1),
+            avg_dur = round(mean(DurationAvg/60),1),
+            max_dur = round(max(DurationAvg/60),1)) %>%
+    bind_cols(., surf_sum[,4])
+  
+
+## print table
+kable(dive_sum_final)
+
+
+## Export cleaned behavior data to RDS
+saveRDS(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.rds"))
+write.csv(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.csv"),
+          row.names = F)
+
+```

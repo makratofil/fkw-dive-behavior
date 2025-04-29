@@ -1,5 +1,5 @@
 # False Killer Whale Diving Behavior Analysis
-Code for processing, analyzing, and visualizing data for Kratofil et al. (in prep) *Ecological and social contexts of diving behavior reveal foraging flexibility in Hawaiian false killer whales*. Raw location and behavior data are being used for several on-going analyses, so are not provided here. 
+This repository contains the code for processing, analyzing, and visualizing data presented in Kratofil et al. (in prep) *Ecological and social contexts of diving behavior reveal foraging flexibility in Hawaiian false killer whales*. Raw location and behavior data are being used for several current analyses, so are not provided here.
 
 ## Data processing
 This folder contains R scripts and helper functions for reviewing (QA/QC) and processing dive and location data for further analyses. The movement data processing (i.e., raw Argos/GPS location data filtering) is not provided here; see [Kratofil et al. (2023)](https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2023.1053581/full) for details on these methods. Seafloor depth and oceanographic files are not provided due to space limitations, but can be found at the links provided in the manuscript. 

@@ -1,7 +1,7 @@
 ## 02_splash_data_summaries.R: data summaries for SPLASH tags
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 28 Apr 2025
+## Updated: 09 May 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -185,8 +185,61 @@ dive_sex_id_sum <- beh %>%
     cv_rate = sd(rate)/mean_rate
   )
 
+# summarize by sex but with PcTagP09 excluded
+beh_sub <- filter(beh, DeployID != "PcTagP09")
+
+dive_sex_id_sum_sub <- beh_sub %>%
+  filter(What == "Dive") %>%
+  group_by(DeployID, sex) %>%
+  summarise(
+    mean_depth = mean(depth_avg50),
+    sd_depth = sd(depth_avg50),
+    med_depth = median(depth_avg50),
+    max_depth = max(depth_avg50),
+    mean_dur = mean(dur_mins),
+    sd_dur = sd(dur_mins),
+    med_dur = median(dur_mins),
+    max_dur = max(dur_mins)
+  ) %>%
+  left_join(., prop[,c(1,7)], by = "DeployID") %>%
+  group_by(sex) %>%
+  summarise(
+    mean_depth = mean(med_depth),
+    cv_depth = sd(med_depth)/mean_depth,
+    mean_dur = mean(med_dur),
+    cv_dur = sd(med_dur)/mean_dur,
+    mean_rate = mean(rate),
+    cv_rate = sd(rate)/mean_rate
+  )
+
+
 # summarize by population
 dive_pop_sum <- beh %>%
+  filter(What == "Dive") %>%
+  group_by(DeployID, population) %>%
+  summarise(
+    mean_depth = mean(depth_avg50),
+    sd_depth = sd(depth_avg50),
+    med_depth = median(depth_avg50),
+    max_depth = max(depth_avg50),
+    mean_dur = mean(dur_mins),
+    sd_dur = sd(dur_mins),
+    med_dur = median(dur_mins),
+    max_dur = max(dur_mins)
+  ) %>%
+  left_join(., prop[,c(1,7)], by = "DeployID") %>%
+  group_by(population) %>%
+  summarise(
+    mean_depth = mean(med_depth),
+    cv_depth = sd(med_depth)/mean_depth,
+    mean_dur = mean(med_dur),
+    cv_dur = sd(med_dur)/mean_dur,
+    mean_rate = mean(rate),
+    cv_rate = sd(rate)/mean_rate
+  )
+
+# summarize by population but exclude PcTagP09
+dive_pop_sum_sub <- beh_sub %>%
   filter(What == "Dive") %>%
   group_by(DeployID, population) %>%
   summarise(

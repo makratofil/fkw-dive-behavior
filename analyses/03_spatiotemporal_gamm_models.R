@@ -163,6 +163,7 @@ summary(depth_pop_g)
 plot(depth_pop_g)
 appraise(depth_pop_g)
 draw(depth_pop_g, scales = "fixed")
+gam.check(depth_pop_g)
 
 # save model object
 saveRDS(depth_pop_g, here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_depth_pop_g_2025Feb21.rds"))
@@ -191,6 +192,7 @@ summary(depth_pop_gs)
 plot(depth_pop_gs)
 appraise(depth_pop_gs)
 draw(depth_pop_gs, scales = "fixed")
+gam.check(depth_pop_gs)
 
 # save model object
 saveRDS(depth_pop_gs, here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_depth_pop_gs_2025Feb21.rds"))
@@ -226,6 +228,7 @@ summary(dur_pop_g)
 plot(dur_pop_g)
 appraise(dur_pop_g)
 draw(dur_pop_g, scales = "fixed")
+gam.check(dur_pop_g)
 
 # save model object
 saveRDS(dur_pop_g, here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_duration_pop_g_2025Feb21.rds"))
@@ -252,6 +255,7 @@ summary(dur_pop_gs)
 plot(dur_pop_gs)
 appraise(dur_pop_gs)
 draw(dur_pop_gs, scales = "fixed")
+gam.check(dur_pop_gs)
 
 # save model object
 saveRDS(dur_pop_gs, here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_duration_pop_gs_2025Feb21.rds"))

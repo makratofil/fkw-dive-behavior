@@ -102,6 +102,7 @@ summary(depth_g)
 plot(depth_g)
 appraise(depth_g)
 draw(depth_g, scales = "fixed")
+gam.check(depth_g)
 
 # save model object
 saveRDS(depth_g, here("pipeline","gamm_models","temporal_gamms_allpops_depth_g_2025Feb20.rds"))
@@ -127,6 +128,7 @@ summary(depth_gs)
 plot(depth_gs)
 appraise(depth_gs)
 draw(depth_gs, scales = "fixed")
+gam.check(depth_gs)
 
 # save model object
 saveRDS(depth_gs, here("pipeline","gamm_models","temporal_gamms_allpops_depth_gs_2025Feb20.rds"))
@@ -162,6 +164,7 @@ summary(dur_g)
 plot(dur_g)
 appraise(dur_g)
 draw(dur_g, scales = "fixed")
+gam.check(dur_g)
 
 # save model object
 saveRDS(dur_g, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_g_2025Feb20.rds"))
@@ -187,6 +190,7 @@ summary(dur_gs)
 plot(dur_gs)
 appraise(dur_gs)
 draw(dur_gs, scales = "fixed")
+gam.check(dur_gs)
 
 # save model object
 saveRDS(dur_gs, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_gs_2025Feb20.rds"))
@@ -308,6 +312,7 @@ plot(rate_g)
 draw(rate_g, scales = "fixed")
 appraise(rate_g)
 draw(rootogram(rate_g)) # recommended to look at this instead of standing histogram Kleiber & Zeilis 2016
+gam.check(rate_g)
 
 # save model object 
 saveRDS(rate_g, here("pipeline","gamm_models","temporal_gamms_allpops_rate_g_2024Dec23.rds"))
@@ -335,6 +340,7 @@ summary(rate_gs)
 draw(rate_gs, scales = "fixed")
 appraise(rate_gs)
 draw(rootogram(rate_gs)) # recommended to look at this instead of standing histogram Kleiber & Zeilis 2016
+gam.check(rate_gs)
 
 # save model object 
 saveRDS(rate_gs, here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Feb20.rds"))

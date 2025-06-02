@@ -1,7 +1,7 @@
 ## 01_tdr_data_summaries.R: summary statistics of TDR dive data 
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 25 Apr 2025
+## Updated: 01 Jun 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -85,12 +85,16 @@ dives10_sum <- dives10 %>%
 dives10_all_sum <- dives10_sum %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_desc = mean(med_desc),
+    sd_desc = sd(med_desc),
     cv_desc = sd(med_desc)/mean_desc,
     mean_asc = mean(med_asc),
+    sd_asc = sd(med_asc),
     cv_asc = sd(med_asc)/mean_asc
   )
 
@@ -138,12 +142,16 @@ dives10_tod <- tdr %>%
   group_by(TimeOfDay) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_desc = mean(med_desc),
+    sd_desc = sd(med_desc),
     cv_desc = sd(med_desc)/mean_desc,
     mean_asc = mean(med_asc),
+    sd_asc = sd(med_asc),
     cv_asc = sd(med_asc)/mean_asc
   )
 
@@ -178,6 +186,7 @@ prop50_tod_sum <- prop50_tod %>%
   group_by(TimeOfDay) %>%
   summarise(
     mean = mean(prop50),
+    sd = sd(prop50),
     cv = sd(prop50)/mean(prop50)
   )
 

@@ -1,7 +1,7 @@
 ## 02_splash_data_summaries.R: data summaries for SPLASH tags
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 09 May 2025
+## Updated: 01 Jun 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -152,10 +152,13 @@ dive_sum_means <- dive_sum_id %>%
   left_join(., prop[,c(1,7)], by = "DeployID") %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -178,10 +181,13 @@ dive_sex_id_sum <- beh %>%
   group_by(sex) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -205,10 +211,13 @@ dive_sex_id_sum_sub <- beh_sub %>%
   group_by(sex) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -231,10 +240,13 @@ dive_pop_sum <- beh %>%
   group_by(population) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -256,10 +268,13 @@ dive_pop_sum_sub <- beh_sub %>%
   group_by(population) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -282,10 +297,13 @@ dive_c3_sum <- beh %>%
   left_join(., prop[,c(1,7)], by = "DeployID") %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate
   )
 
@@ -358,6 +376,7 @@ surf_sum <- data %>%
   ) %>%
 summarise(
   gmean = mean(median_dur),
+  sd = sd(median_dur),
   cv = sd(median_dur)/gmean
 )
 

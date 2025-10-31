@@ -4,7 +4,7 @@
 ## 04c: split by hour of the day, instead of time of day (diel period)
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 18 Feb 2025
+## Updated: 10 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -19,7 +19,7 @@ library(purrr)
 library(timeplyr)
 
 ## read in compiled pseudotrack file and format for splitting surfaces ## ---- ##
-beh <- readRDS(here("pipeline","geoprocessed","all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_2025Feb18.rds"))
+beh <- readRDS(here("pipeline","geoprocessed","all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_2025Oct17.rds"))
 
 # first: for analysis, we will consider dives as 50 meters or greater and 2 minutes
 # or longer to maintain consistency across programming regimes. therefore, anything
@@ -75,11 +75,12 @@ pc49 <- filter(beh2, DeployID == "PcTag049")
 beh_clean <- beh2 %>%
   dplyr::select(DeployID, Ptt, Start, End, What, Shape, depth_avg50,
                 dur_secs, dur_mins, dur_hrs, dur_days, lon, lat, se.mu.x,
-                se.mu.y, seg_id4, seg_id6, seg_id8, start_utc, end_utc, start_hst,  
-                depthH, slopeH, aspectH, depthM, slopeM, aspectM, depthL, slopeL, aspectL,
-                sunrise, sunset, solar_noon, civil_dawn, end_dawn, civil_dusk, start_dusk, 
-                sun_azimuth, sun_altitude, moon_azimuth, moon_altitude, moon_ill_fraction, 
-                moon_phase, tod, chla, chla_unc, chla_flag, mld)
+                se.mu.y, seg_id4, seg_id6, seg_id8, start_utc, end_utc, start_hst,
+                sunrise, sunset, solar_noon, civil_dawn, end_dawn, civil_dusk, start_dusk,
+                depthH, slopeH, depthM, slopeM, depthL, slopeL, moon_ill_fraction, 
+                moon_phase, tod, chlad, chlad_unc, chlad_flag,chla30d, chla30d_unc,
+                chla30d_flag, pp, pp_unc, pp_flag, sst, sst_sd, ssh, ssh_sd, 
+                u_cur, v_cur, mld)
 
 # get the number of dive and surface periods not split by time of day
 beh_clean %>%
@@ -213,17 +214,18 @@ all <- bind_rows(dives2, surfs_split) %>%
   ) %>%
   dplyr::select(-c( Start, End)) %>%
   dplyr::select(DeployID, Ptt, start_utc, end_utc, What, depth_avg50, dur_secs, dur_mins, dur_hrs, dur_days,
-         lon, lat, se.mu.x, se.mu.y, seg_id4, seg_id6, seg_id8, start_hst, end_hst, sunrise, sunset,
-         civil_dawn, end_dawn, civil_dusk, start_dusk, sun_azimuth, sun_altitude, moon_azimuth, 
-         moon_altitude, moon_ill_fraction, moon_phase, tod, 
-         depthH, slopeH, aspectH, depthM, slopeM, aspectM, depthL, slopeL, aspectL, Shape, 
-         chla, chla_unc, chla_flag, mld)
+                lon, lat, se.mu.x, se.mu.y, seg_id4, seg_id6, seg_id8, start_hst, end_hst, sunrise, sunset,
+                civil_dawn, end_dawn, civil_dusk, start_dusk, 
+                moon_ill_fraction, moon_phase, tod, 
+                depthH, slopeH,depthM, slopeM, depthL, slopeL, Shape,chlad, chlad_unc, chlad_flag,chla30d, chla30d_unc,
+                chla30d_flag, pp, pp_unc, pp_flag, sst, sst_sd, ssh, ssh_sd, 
+                u_cur, v_cur, mld)
 
 # review
 summary(all)
 
 ## save the file ## ---------------------------------------------------------- ##
 write.csv(all, here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Feb18.csv"), row.names = F)
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Oct17.csv"), row.names = F)
 saveRDS(all, here("pipeline","clean_data_for_analysis",
-                  "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Feb18.rds"))
+                  "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Oct17.rds"))

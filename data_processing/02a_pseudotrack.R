@@ -4,7 +4,7 @@
 ## 02a: regular/single pseudotrack (not multiple imputation)
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 18 Feb 2025
+## Updated: 04 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -25,7 +25,7 @@ library(pathroutr)
 set.seed(123)
 
 ## read in and prep Douglas Filtered movement data for modeling ## ----------- ##
-tbl_locs <- readr::read_csv(here("data","location","PcTag001-092_DouglasFiltered_r20d3lc2_ArgosGPS_2024JUNv1.csv"),
+tbl_locs <- readr::read_csv(here("data","location","PcTag001-099_DouglasFiltered_r20d3lc2_ArgosGPS_2025OCTv1.csv"),
                             col_types = 
                             cols(animal = col_character(),
                             ptt = col_double(),
@@ -54,7 +54,8 @@ unique(tbl_locs$LC)
 tbl_sub <- tbl_locs %>%
   filter(animal %in% c("PcTag026","PcTag028","PcTag030","PcTag032",
                        "PcTag035","PcTag037","PcTag049","PcTag055",
-                       "PcTag074","PcTag090","PcTag092","PcTagP09")) 
+                       "PcTag074","PcTag090","PcTag092","PcTagP09",
+                       "PcTag095","PcTag096","PcTag097","PcTag099")) 
 
 summary(tbl_sub)
 
@@ -172,16 +173,16 @@ for(i in 1:nrow(mov)){
 
 # all params look good, use this model.
 # save crawl fitted models RDS file
-saveRDS(mov, here("pipeline", "PcTags_SPLASH_thru092_Kalman_Crawl_Fitted_Model_wSegments_2025Feb18.rds"))
+saveRDS(mov, here("pipeline", "PcTags_SPLASH_thru099_Kalman_Crawl_Fitted_Model_wSegments_2025Oct04.rds"))
 
 ## predict crawl positions at behavior log times ## -------------------------- ##
-mov <- readRDS(here("pipeline","PcTags_SPLASH_thru092_Kalman_Crawl_Fitted_Model_wSegments_2025Feb18.rds"))
+mov <- readRDS(here("pipeline","PcTags_SPLASH_thru099_Kalman_Crawl_Fitted_Model_wSegments_2025Oct04.rds"))
 mov
 
 # get objects for pathroutr to reroute predicted locations around land 
 # read in 20m isobath 
 iso20 <- readRDS(here("code","data_processing","isobath20m_for_rerouting.rds"))
-bathy <- readRDS(bathy, here("code","data_processing","raster_for_rerouting.rds"))
+bathy <- readRDS(here("code","data_processing","raster_for_rerouting.rds"))
 
 # quick map
 ggplot()+
@@ -207,8 +208,9 @@ ggplot() +
 vis_graph <- pathroutr::prt_visgraph(iso20, centroids=TRUE, aug_points=aug_pts)
 
 # going to loop through each animal, read in the behavior log file, and provide
-# the timestamps of the behavior log file to crawl to predict locations at 
-# (this is a simplified approach to the pseudotracks)
+# the timestamps of the behavior log file to crawl to predict locations at. will
+# also predict at finer timestep (this helps ensure the pathroutr process works
+# as intended)
 ids <- unique(mov$animal)
 
 for(i in 1:length(ids)){
@@ -220,7 +222,7 @@ for(i in 1:length(ids)){
   
   # get the compiled QA/QC'd behavior log file 
   bq <- readRDS(here("pipeline","qaqcd_behavior_data",
-                     "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.rds"))
+                     "PcTags_SPLASH_thru099_behavior_logs_qaqcd_2025Oct02.rds"))
   
   # filter the behavior log for the ID  
   id_dive <- filter(bq, DeployID == id)
@@ -240,8 +242,25 @@ for(i in 1:length(ids)){
       start_hst = as.POSIXct(format(Start, tz="Pacific/Honolulu"), tz="Pacific/Honolulu")
     )
   
+  # create a vector of times every 5 mins from the start to the end of the 
+  # behavior log
+  times_pred <- data.frame(start_utc = timeplyr::time_seq(id_dive$start_utc[1],
+                                                         id_dive$start_utc[nrow(id_dive)],
+                                                         time_by = "5 min"),
+                           type = "pred") %>%
+    bind_rows(., id_dive) %>%
+    arrange(start_utc) %>%
+    mutate(
+      dt = as.numeric(difftime(start_utc, lag(start_utc), units = "mins"))
+    ) %>%
+    dplyr::select(start_utc, type, dt) 
+  
+  # filter duplicates 
+  nodup <- times_pred %>%
+    filter(., dt > 0 | is.na(dt))
+  
   # create vector of times to predict crawl for
-  log_times <- id_dive$start_utc
+  log_times <- nodup$start_utc
   
   # get the crawl fitted object for that ID
   id_crawl <- mov[[7]][[i]]
@@ -275,8 +294,68 @@ for(i in 1:length(ids)){
   # reroute the locations around land 
   pts_trim <- pathroutr::prt_trim(id_pseu3, iso20)
   pts_rr <- pathroutr::prt_reroute(pts_trim, iso20, vis_graph, blend = F)
-  pts_new <- pathroutr::prt_update_points(pts_rr, pts_trim)
-  #mapview::mapview(pts_new)
+  
+  # manual workaround bug in pathrotur for prt_update:
+  # if there were rerouted points, then update geometry. otherwise, use pts trim
+  if(nrow(pts_rr) > 0){
+    
+    # update geometry of points with rerouted geometry. doing this manually for now
+    # because keep getting an error with dplyr::rows_update() (told Josh)
+    
+    # first get a fixed/point id of the trimmed points
+    pts_trim <- pts_trim %>% sf::st_cast("POINT") %>%
+      sf::st_sf() %>% tibble::rowid_to_column("fid")
+    
+    # get st coordinates and convert to dataframe
+    trim_coords <- st_coordinates(pts_trim)
+    trim_df <- pts_trim %>%
+      st_drop_geometry() %>%
+      bind_cols(., trim_coords)
+    trim_df$or <- "original" # indicator for type (helpful for checking later)
+    
+    # rerouted points: not in sf object, so make into sf object, then dataframe
+    rr_sf <- pts_rr %>%
+      st_sf(sf_column_name = "geometry", crs = st_crs(pts_trim))
+    rr_coords <- st_coordinates(rr_sf)
+    rr_df <- rr_sf %>%
+      st_drop_geometry() %>%
+      bind_cols(., rr_coords)
+    rr_df$or <- "rerouted" # indicator for type (helpful for checking later)
+    
+    # update the rows in trimmed dataframe with rerouted points, based on fid
+    res <- trim_df %>%
+      dplyr::rows_update(rr_df, by = "fid")
+    
+    # make into sf object again
+    res_sf <- st_as_sf(res, coords = c("X","Y"), crs = st_crs(pts_trim))
+    
+    # check 
+    # ggplot() +
+    #   geom_sf(data = iso20, color = NA, fill = "black") +
+    #   geom_sf(data = pts_trim, color = "red") +
+    #   geom_sf(data = res_sf, color = "blue")
+    
+    
+  } else{
+    
+    # first get a fixed/point id of the trimmed points
+    pts_trim <- pts_trim %>% sf::st_cast("POINT") %>%
+      sf::st_sf() %>% tibble::rowid_to_column("fid")
+    
+    # get st coordinates and convert to dataframe
+    trim_coords <- st_coordinates(pts_trim)
+    trim_df <- pts_trim %>%
+      st_drop_geometry() %>%
+      bind_cols(., trim_coords)
+    trim_df$or <- "original" # indicator for type (helpful for checking later)
+    
+    # make into sf object again (same format as above)
+    res_sf <- st_as_sf(trim_df, coords = c("X","Y"), crs = st_crs(pts_trim))
+    
+  }
+  
+  # reassign
+  pts_new <- res_sf
   
   # get lines 
   lines <- pts_new %>%
@@ -291,11 +370,11 @@ for(i in 1:length(ids)){
   p
   
   ggsave(plot = p, path = here("outputs","pathroutr_plots"),
-         filename = paste0(id,"_behavlog_pseudotrack_rerouted_20mIso_2025Feb18.png"))
+         filename = paste0(id,"_behavlog_pseudotrack_rerouted_20mIso_2025Oct04.png"))
   
   # remove the "original" timestamps of the argos locations, so we only get the 
   # dive/surface records
-  id_pseu4 <- filter(pts_new, locType == "p")
+  id_pseu4 <- filter(pts_new, !is.na(What))
   
   # get the coordinates back
   id_pseu4_wgs <- st_transform(id_pseu4, crs = 4326)
@@ -318,6 +397,6 @@ for(i in 1:length(ids)){
   
   # save the file 
   write.csv(clean_pseu, here("pipeline","crawl_pseudotracks",
-                             paste0(id,"_behavlog_pseudotrack_rerouted20mIso_2025Feb18.csv")), row.names = F)
+                             paste0(id,"_behavlog_pseudotrack_rerouted20mIso_2025Oct04.csv")), row.names = F)
   
 }

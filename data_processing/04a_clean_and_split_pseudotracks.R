@@ -5,7 +5,7 @@
 ## 04a: regular/single pseudotracks
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 18 Feb 2025
+## Updated: 17 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -17,7 +17,7 @@ library(purrr)
 
 ## read in compiled pseudotrack file and format for splitting surfaces ## ---- ##
 beh <- readRDS(here("pipeline","geoprocessed",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_2025Oct17.rds"))
 
 # first: for analysis, we will consider dives as 50 meters or greater and 2 minutes
 # or longer to maintain consistency across programming regimes. therefore, anything
@@ -74,10 +74,11 @@ beh_clean <- beh2 %>%
   dplyr::select(DeployID, Ptt, Start, End, What, Shape, depth_avg50,
                 dur_secs, dur_mins, dur_hrs, dur_days, lon, lat, se.mu.x,
                 se.mu.y, seg_id4, seg_id6, seg_id8, start_utc, end_utc, start_hst,
-                depthH, slopeH, aspectH, depthM, slopeM, aspectM, depthL, slopeL, aspectL,
-                sunrise, sunset, solar_noon, civil_dawn, end_dawn, civil_dusk, start_dusk, 
-                sun_azimuth, sun_altitude, moon_azimuth, moon_altitude, moon_ill_fraction, 
-                moon_phase, tod, chla, chla_unc, chla_flag, mld)
+                sunrise, sunset, solar_noon, civil_dawn, end_dawn, civil_dusk, start_dusk,
+                depthH, slopeH, depthM, slopeM, depthL, slopeL, moon_ill_fraction, 
+                moon_phase, tod, chlad, chlad_unc, chlad_flag,chla30d, chla30d_unc,
+                chla30d_flag, pp, pp_unc, pp_flag, sst, sst_sd, ssh, ssh_sd, 
+                u_cur, v_cur, mld)
 
 # get the number of dive and surface periods not split by time of day
 beh_clean %>%
@@ -107,8 +108,9 @@ summary(surfaces$durationDays)
 # for surface splitting functions)
 tz_df <- data.frame(
   DeployID = c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag035","PcTag037",
-               "PcTag049","PcTag055","PcTag074","PcTag090","PcTag092","PcTagP09"),
-  TZ = c(rep("UTC",4), rep("Pacific/Honolulu",2), rep("UTC",6))
+               "PcTag049","PcTag055","PcTag074","PcTag090","PcTag092","PcTagP09",
+               "PcTag095","PcTag096","PcTag097","PcTag099"),
+  TZ = c(rep("UTC",4), rep("Pacific/Honolulu",2), rep("UTC",10))
 )
 
 # add timezone info to the surfs data 
@@ -124,7 +126,7 @@ surfs_nest <- surfaces %>%
 
 # create helper functions to create columns in nested dataframe that will then
 # be used to apply split surfaces functions to each behavior log 
-surfs_nest$TZ <- c(rep("UTC",4), rep("Pacific/Honolulu",2), rep("UTC",6))
+surfs_nest$TZ <- c(rep("UTC",4), rep("Pacific/Honolulu",2), rep("UTC",10))
 
 format_time <- function(data, TZ){
   
@@ -204,16 +206,17 @@ all <- bind_rows(dives2, surfs_split) %>%
   dplyr::select(-c(durationDays, `int_diff(dates)`, Start, End, datetime_hst, depid, TZ)) %>%
   dplyr::select(DeployID, Ptt, start_utc, end_utc, What, depth_avg50, dur_secs, dur_mins, dur_hrs, dur_days,
          lon, lat, se.mu.x, se.mu.y, seg_id4, seg_id6, seg_id8, start_hst, end_hst, sunrise, sunset,
-         civil_dawn, end_dawn, civil_dusk, start_dusk, sun_azimuth, sun_altitude, moon_azimuth, 
-         moon_altitude, moon_ill_fraction, moon_phase, tod, 
-         depthH, slopeH,aspectH, depthM, slopeM, aspectM, depthL, slopeL, aspectL, Shape,
-         chla, chla_unc, chla_flag, mld)
+         civil_dawn, end_dawn, civil_dusk, start_dusk, 
+         moon_ill_fraction, moon_phase, tod, 
+         depthH, slopeH,depthM, slopeM, depthL, slopeL, Shape,chlad, chlad_unc, chlad_flag,chla30d, chla30d_unc,
+         chla30d_flag, pp, pp_unc, pp_flag, sst, sst_sd, ssh, ssh_sd, 
+         u_cur, v_cur, mld)
 
 # review
 summary(all)
 
 ## save the file ## ---------------------------------------------------------- ##
 write.csv(all, here("pipeline","clean_data_for_analysis",
-                        "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.csv"), row.names = F)
+                        "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct17.csv"), row.names = F)
 saveRDS(all, here("pipeline","clean_data_for_analysis",
-                      "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                      "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct17.rds"))

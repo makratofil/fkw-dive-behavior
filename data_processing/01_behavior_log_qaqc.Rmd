@@ -1,7 +1,7 @@
 ---
 title: 'Behavior log data QA/QC: false killer whales'
 author: "Michaela A. Kratofil"
-date: "2/17/2025"
+date: "10/2/2025"
 output: word_document
 ---
 
@@ -251,7 +251,10 @@ behavior_qc <- bind_rows(result_list)
 p74 <- filter(behavior_qc, DeployID == "PcTag074")
 p90 <- filter(behavior_qc, DeployID == "PcTag090")
 p92 <- filter(behavior_qc, DeployID == "PcTag092")
-
+p95 <- filter(behavior_qc, DeployID == "PcTag095")
+p96 <- filter(behavior_qc, DeployID == "PcTag096")
+p97 <- filter(behavior_qc, DeployID == "PcTag097")
+p99 <- filter(behavior_qc, DeployID == "PcTag099")
 
 ```
 
@@ -298,7 +301,7 @@ for(i in 1:length(status_list)){
     DeployID = crc$DeployID[1],
     PTT = crc$Ptt[1],
     maxDepth = max(crc$Depth, na.rm = T),
-    maxZeroDepthOffset = max(crc$ZeroDepthOffset, na.rm = T)
+    maxZeroDepthOffset = max(abs(crc$ZeroDepthOffset), na.rm = T)
   )
   
   # status files that don't have any Depth or ZeroDepthOffset values will return
@@ -324,7 +327,7 @@ status_table <- bind_rows(statuses)
 kable(status_table)
 ```
 
-All tag files meet acceptable levels of depth and zero-depth-max values in their status files, so no need to remove any records based on status file readings. 
+All tag files meet acceptable levels of depth and zero-depth-max values in their status files, so no need to remove any records based on status file readings. Note that the absolute value of the ZeroDepthOffset is reported. 
 
 ## Ascent/descent rates
 Calculate estimated dive ascent/descent rates following [Baird et al. (2019)](https://www.cascadiaresearch.org/files/publications/Bairdetal2019_Hatteras.pdf). Dive ascent/descent rates were calculated as: 2*Dive depth (avg., meters) / Dive duration (seconds). While this is a coarse estimation of ascent/descent rates, extreme values could indicate the presence of some tag malfunctioning. The highest ascent/descent rate measured from a time-depth-recorder on a false killer whale was 5.8 meters per second, and thus we use this to gauge reasonable versus extreme values. 
@@ -495,8 +498,9 @@ series_tags <- length(series_list)
 
 ## for each tag, read in the series file, format the datetime, identify the sampling
 ## interval, and make plots 
-for(i in 1:series_tags){
-  #i = 1
+for(i in 9:12){
+  #i = 9
+  #1:series_tags
   # read in the ith series file 
   ser <- read.csv(series_list[[i]])
   
@@ -582,7 +586,7 @@ for(i in 1:series_tags){
     chunk_last_hst <- strftime(chunk$date_time[n_chunk], tz = "Pacific/Honolulu", format = "%Y-%m-%d %H:%M:%S")
     
     # get dive plot metrics
-    max_depth <- round(max(behavior$DepthMax, na.rm = T), digits = -2) + 100
+    max_depth <- round(max(behav$DepthMax, na.rm = T), digits = -2) + 100
     
     # animal
     animal <- first(chunk$DeployID)
@@ -743,8 +747,10 @@ kable(dive_sum_final)
 
 
 ## Export cleaned behavior data to RDS
-saveRDS(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.rds"))
-write.csv(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.csv"),
+saveRDS(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thru099_behavior_logs_qaqcd_2025Oct02.rds"))
+write.csv(behavior_final, here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thru099_behavior_logs_qaqcd_2025Oct02.csv"),
           row.names = F)
+
+behavior_final <- readRDS(here("pipeline","qaqcd_behavior_data", "PcTags_SPLASH_thru099_behavior_logs_qaqcd_2025Oct02.rds"))
 
 ```

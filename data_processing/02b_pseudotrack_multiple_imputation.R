@@ -3,7 +3,7 @@
 ## model MLE parameter estimates
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 23 Feb 2025
+## Updated: 04 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -20,14 +20,20 @@ library(janitor)
 library(zoo)
 library(pathroutr)
 
+## set seed
+set.seed(123)
+
+## load pathoutr helper function
+source(here("code","data_processing","pathroutr_helper.R"))
+
 ## read in the fitted movement models from "pseudotrack.R" ## ---------------- ##
-mov <- readRDS(here("pipeline","PcTags_SPLASH_thru092_Kalman_Crawl_Fitted_Model_wSegments_2025Feb18.rds"))
+mov <- readRDS(here("pipeline","PcTags_SPLASH_thru099_Kalman_Crawl_Fitted_Model_wSegments_2025Oct04.rds"))
 
 ## get objects for pathroutr to reroute predicted locations around land ------ ##
 
 # 20m isobath and bathymetry for augmented points
 iso20 <- readRDS(here("code","data_processing","isobath20m_for_rerouting.rds"))
-bathy <- readRDS(bathy, here("code","data_processing","raster_for_rerouting.rds"))
+bathy <- readRDS(here("code","data_processing","raster_for_rerouting.rds"))
 
 # quick map
 ggplot()+
@@ -60,7 +66,9 @@ vis_graph <- pathroutr::prt_visgraph(iso20, centroids=TRUE, aug_points=aug_pts)
 # (this is a simplified approach to the pseudotracks)
 ids <- unique(mov$animal)
 
-for(i in 1:length(ids)){
+# the for loop here is set up to do the additional tags (i.e., not rerunning old
+# tags). replace with "1:length(ids)" if want to run on everything. 
+for(i in 13:15){
   # for testing
   #i = 12
   
@@ -69,7 +77,7 @@ for(i in 1:length(ids)){
   
   # get the compiled QA/QC'd behavior log file 
   bq <- readRDS(here("pipeline","qaqcd_behavior_data",
-                     "PcTags_SPLASH_thruP09_behavior_logs_qaqcd_2025Feb17.rds"))
+                     "PcTags_SPLASH_thru099_behavior_logs_qaqcd_2025Oct02.rds"))
   
   # filter the behavior log for the ID  
   id_dive <- filter(bq, DeployID == id)
@@ -89,8 +97,25 @@ for(i in 1:length(ids)){
       start_hst = as.POSIXct(format(Start, tz="Pacific/Honolulu"), tz="Pacific/Honolulu")
     )
   
+  # create a vector of times every 5 mins from the start to the end of the 
+  # behavior log
+  times_pred <- data.frame(start_utc = timeplyr::time_seq(id_dive$start_utc[1],
+                                                          id_dive$start_utc[nrow(id_dive)],
+                                                          time_by = "5 min"),
+                           type = "pred") %>%
+    bind_rows(., id_dive) %>%
+    arrange(start_utc) %>%
+    mutate(
+      dt = as.numeric(difftime(start_utc, lag(start_utc), units = "mins"))
+    ) %>%
+    dplyr::select(start_utc, type, dt) 
+  
+  # filter duplicates 
+  nodup <- times_pred %>%
+    filter(., dt > 0 | is.na(dt))
+  
   # create vector of times to predict crawl for
-  log_times <- id_dive$start_utc
+  log_times <- nodup$start_utc
   
   # get the crawl fitted object for that ID
   id_crawl <- mov[[7]][[i]]
@@ -105,9 +130,7 @@ for(i in 1:length(ids)){
     mutate(postis = list(crwPostIS(tag_sim, fullPost = FALSE)),
            pts = list(crw_as_sf(postis, locType = c("p","o"), ftype = "POINT")),
            pts = list(st_transform(pts, crs = 3857)),
-           pts_trim = list(pathroutr::prt_trim(pts, iso20)),
-           rrt_pts = list(pathroutr::prt_reroute(pts_trim, iso20, vis_graph, blend = FALSE)),
-           pts_fix = list(pathroutr::prt_update_points(rrt_pts = rrt_pts, trkpts = pts_trim)),
+           pts_fix = list(mak_ptr(tdata = pts, barrier = iso20, vis_graph = vis_graph)),
            lines_fix = list(pts_fix %>% summarise(do_union = FALSE) %>% st_cast('LINESTRING'))
     )
   
@@ -123,13 +146,16 @@ for(i in 1:length(ids)){
   
   # append the other variables from dive behavior log to the crawl file 
   sim_points2 <- left_join(sim_points, id_dive, by = "start_utc")
+  
+  # filter out the dives/surfaces
+  sim_beh <- filter(sim_points2, !is.na(What))
 
   # get the lat/lon coordinates back
-  sim_points2_wgs <- st_transform(sim_points2, crs = 4326)
-  id_coords <- as.data.frame(st_coordinates(sim_points2_wgs))
+  sim_beh_wgs <- st_transform(sim_beh, crs = 4326)
+  id_coords <- as.data.frame(st_coordinates(sim_beh_wgs))
   
   # format/clean up the data 
-  clean_sim <- sim_points2 %>%
+  clean_sim <- sim_beh %>%
     bind_cols(., id_coords) %>%
     st_drop_geometry() %>%
     dplyr::rename(
@@ -145,6 +171,6 @@ for(i in 1:length(ids)){
   
   # save the file 
   write.csv(clean_sim, here("pipeline","crawl_pseudotracks_multiple_imputation",
-                             paste0(id,"_behavlog_pseudotrack_20imputes_rerouted20mIso_2025Feb23.csv")), row.names = F)
+                             paste0(id,"_behavlog_pseudotrack_20imputes_rerouted20mIso_2025Oct04.csv")), row.names = F)
   
 }

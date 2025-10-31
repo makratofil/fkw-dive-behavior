@@ -1,7 +1,7 @@
 # False Killer Whale Diving Behavior Analysis
-This repository contains the code for processing, analyzing, and visualizing data presented in *Ecological and social contexts of diving behavior reveal foraging flexibility in Hawaiian false killer whales* Kratofil MA, Shaff JF, Hoffbauer HK, Cantor M, Hill MC, Baird RW. (in review; *Movement Ecology*). Raw location and behavior data are being used for several current analyses and thus are not publicly available at this time. However, location data can be visualized on [Movebank](https://www.movebank.org/cms/movebank-main). 
+This repository contains the code for processing, analyzing, and visualizing data presented in *Ecological contexts of diving behavior in Hawaiian false killer whales* Kratofil MA, Shaff JF, Hoffbauer HK, Cantor M, Hill MC, Baird RW. (in review; *Movement Ecology*). Raw location and behavior data are being used for several current analyses and thus are not publicly available at this time. However, location data can be visualized on [Movebank](https://www.movebank.org/cms/movebank-main). 
 
-Code can be cited as: Kratofil MA, Shaff JF, Hoffbauer HK, Cantor M, Hill MC, Baird RW (2025) Code for *Ecological and social contexts of diving behavior reveal foraging flexibility in Hawaiian false killer whales*. Zenodo. https:://doi.org/10.5281/zenodo.15306564 
+Code can be cited as: Kratofil MA, Shaff JF, Hoffbauer HK, Cantor M, Hill MC, Baird RW (2025) Code for *Ecological contexts of diving behavior in Hawaiian false killer whales*. Zenodo. https:://doi.org/10.5281/zenodo.15306564 
 
 Corresponding author: Michaela A. Kratofil (michaela.kratofil@oregonstate.edu or mkratofil@cascadiaresearch.org)
 

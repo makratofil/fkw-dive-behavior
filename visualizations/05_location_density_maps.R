@@ -2,7 +2,7 @@
 ## density to visually compare with the density/distribution of dives
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 Apr 2025
+## Updated: 13 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -15,14 +15,46 @@ library(ggplot2)
 library(ggspatial)
 
 ## read in crawl locations ## ------------------------------------------------ ##
-crawl <- readRDS(here("pipeline","PcTags_SPLASH_thru092_Kalman_Crawl1hr_rerouted20mIso_wSegments_2024Dec29.rds"))
+
+# nested table object 
+crawl <- readRDS(here("pipeline","PcTag001-099_crawl_rerouted20mIso_nested_table_2025Oct04.rds"))
+
+# filter SPLASH tags, and select the 1-hour predicted locations 
+splash <- filter(crawl, tag_id %in% c("PcTag026","PcTag028","PcTag030","PcTag032",
+                                      "PcTag035","PcTag037","PcTag049","PcTag055",
+                                      "PcTag074","PcTag090","PcTag092","PcTagP09",
+                                      "PcTag095","PcTag096","PcTag097","PcTag099")) 
+
+# tidyr::unnest is working weird, manually unnest 1hr predicted locations
+preds <- list()
+for(id in 1:nrow(splash)){
+  
+  # for testing 
+  #id = 1
+  
+  # get the tagid
+  tagid <- splash$tag_id[id]
+  
+  # get the pred1hr object 
+  pid <- bind_rows(splash$pred1hr[id])
+  
+  # add deployment id
+  pid$tag_id <- tagid
+  
+  # store in list 
+  preds[[id]] <- pid
+}
+
+# bind
+preds_df <- bind_rows(preds) %>%
+  st_sf()
 
 # get original time points (i.e., original Argos/GPS locations but smoothed by crawl)
-o <- filter(crawl, locType == "o")
+o <- filter(preds_df, locType == "o")
 
 ## read in behavior log to get dives ## -------------------------------------- ##
 beh <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct10.rds"))
 
 # filter out dives and make into sf object for mapping 
 beh_sf <- beh %>%
@@ -44,6 +76,7 @@ endt <- beh %>%
 endt$animal <- endt$DeployID
 
 # remove locations from argos track that occurred after the last behavior log record
+o$animal <- o$tag_id
 o <- left_join(o, endt, by = "animal")
 
 o_sub <- o %>%
@@ -59,10 +92,10 @@ o_sub %>%
 o_sub <- o_sub %>%
   mutate(
     population = case_when(
-      animal %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      animal %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
-      animal %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
+      DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
+      DeployID %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
 
@@ -126,7 +159,10 @@ ggplot() +
   ggspatial::annotation_scale(text_cex = 0.9, text_col = "black") +
   ggspatial::annotation_north_arrow(location = "tr")
 
-ggsave(here("outputs","mhi_original_location_density_map_250kmhexgrid_2025Mar17_v2.png"),
+ggsave(here("outputs","mhi_original_location_density_map_250kmhexgrid_2025Oct13.png"),
+       width = 9, height = 5, units = "in")
+
+ggsave(here("outputs","mhi_original_location_density_map_250kmhexgrid_2025Oct13.pdf"),
        width = 9, height = 5, units = "in")
 
 ## make NWHI grid and map ## -------------------------------------------------- ##
@@ -184,7 +220,10 @@ ggplot() +
   ggspatial::annotation_scale(text_cex = 0.9, text_col = "black") +
   ggspatial::annotation_north_arrow(location = "tr")
 
-ggsave(here("outputs","nwhi_original_location_density_map_250kmhexgrid_2025Mar17_v2.png"),
+ggsave(here("outputs","nwhi_original_location_density_map_250kmhexgrid_2025Oct13.png"),
+       width = 7, height = 5, units = "in")
+
+ggsave(here("outputs","nwhi_original_location_density_map_250kmhexgrid_2025Oct13.pdf"),
        width = 7, height = 5, units = "in")
 
 ## make pelagic grid and map ## ---------------------------------------------- ##
@@ -243,5 +282,7 @@ ggplot() +
   ggspatial::annotation_north_arrow(location = "br")
 
 ggsave(here("outputs","pelagic_original_location_density_map_250kmhexgrid_2025Mar17_v2.png"),
+       width = 9, height = 4, units = "in")
+ggsave(here("outputs","pelagic_original_location_density_map_250kmhexgrid_2025Mar17_v2.pdf"),
        width = 9, height = 4, units = "in")
 

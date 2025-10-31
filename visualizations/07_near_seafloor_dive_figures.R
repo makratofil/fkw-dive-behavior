@@ -2,7 +2,7 @@
 ## analysis products 
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 April 2025
+## Updated: 19 Oct 2025
 
 ## ---------------------------------------------------------------------------- ##
 
@@ -13,9 +13,10 @@ library(ggplot2)
 library(sf)
 library(ggspatial)
 library(ggridges)
+library(ggpubr)
 
 ## load data from near seafloor dive analysis script ## ----------------------- ##
-load(here("pipeline","data_objects_for_seafloor_dives_analysis_2025Apr29.RData"))
+load(here("pipeline","data_objects_for_seafloor_dives_analysis_2025Oct19.RData"))
 
 ## make plot of standard deviation values for all individuals, all dives ## --- ##
 
@@ -26,17 +27,21 @@ dive_sf_sum$DeployID <- factor(dive_sf_sum$DeployID, levels = c("PcTag026",
                                                                 "PcTag032",
                                                                 "PcTag055",
                                                                 "PcTag074",
+                                                                "PcTag095",
+                                                                "PcTag099",
                                                                 "PcTag035",
                                                                 "PcTag037",
-                                                                "PcTag049"))
+                                                                "PcTag049",
+                                                                "PcTag096",
+                                                                "PcTag097"))
 
 # add population back
 dive_sf_sum <- dive_sf_sum %>%
   mutate(
     population = case_when(
       DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      DeployID %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI"
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI"
     )
   )
 
@@ -54,16 +59,16 @@ ggplot(dive_sf_sum, aes(x = DeployID, y = sd_sf, fill = population)) +
     legend.position = "none"
   )
 
-ggsave(here("outputs","seafloor_depth_plots","SD_seafloor_depth_boxplot_all_2025Apr25.png"),
+ggsave(here("outputs","seafloor_depth_plots","SD_seafloor_depth_boxplot_all_2025Oct19.png"),
        width = 6, height = 5, units = "in")
 
 ## make boxplots of dive metrics by tod ## --------------------------------------- ##
 
 # dive depth
-ggplot(dives_100sd, aes(x = tod, y = dive_depth, fill = tod)) +
+ggplot(dives_100sd_abs, aes(x = tod, y = dive_depth, fill = tod)) +
   geom_boxplot(outliers = F) +
   scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
-  geom_jitter(data = dives_100sd, width=0.15, size=2, shape = 21, color = "gray39", aes(x = tod, fill = tod, y = dive_depth)) +
+  geom_jitter(data = dives_100sd_abs, width=0.15, size=2, shape = 21, color = "gray39", aes(x = tod, fill = tod, y = dive_depth)) +
   labs(fill = "") +
   xlab("") +
   ylab("Dive depth (m)") +
@@ -75,14 +80,14 @@ ggplot(dives_100sd, aes(x = tod, y = dive_depth, fill = tod)) +
     axis.title = element_text(color = "black", size = 12, face = "bold")
   )
 
-ggsave(here("outputs","seafloor_depth_plots","probable_seafloor_dives_divedepth_tod_boxplot_all_2025Feb25_v2.png"),
+ggsave(here("outputs","seafloor_depth_plots","probable_seafloor_dives_divedepth_tod_boxplot_all_2025Oct19.png"),
        width = 5, height = 3, units = "in", bg = "transparent")
 
 # dive duration
-ggplot(dives_100sd, aes(x = tod, y = dive_dur, fill = tod)) +
+ggplot(dives_100sd_abs, aes(x = tod, y = dive_dur, fill = tod)) +
   geom_boxplot(outliers = F) +
   scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
-  geom_jitter(data = dives_100sd, width=0.15, size=2, shape = 21, color = "gray39", aes(x = tod, fill = tod, y = dive_dur)) +
+  geom_jitter(data = dives_100sd_abs, width=0.15, size=2, shape = 21, color = "gray39", aes(x = tod, fill = tod, y = dive_dur)) +
   labs(fill = "") +
   xlab("") +
   ylab("Dive duration (min)") +
@@ -93,7 +98,7 @@ ggplot(dives_100sd, aes(x = tod, y = dive_dur, fill = tod)) +
     axis.title = element_text(color = "black", size = 12, face = "bold")
   )
 
-ggsave(here("outputs","seafloor_depth_plots","probable_seafloor_dives_divedur_tod_boxplot_all_2025Feb25_v2.png"),
+ggsave(here("outputs","seafloor_depth_plots","probable_seafloor_dives_divedur_tod_boxplot_all_2025Oct19.png"),
        width = 5, height = 3, units = "in", bg = "transparent")
 
 # dive rate
@@ -111,7 +116,7 @@ ggplot(merge_tod2, aes(x = tod, y = sf_rate, fill = tod)) +
     axis.title = element_text(color = "black", size = 12, face = "bold")
   )
 
-ggsave(here("outputs","seafloor_depth_plots","dive_rates_seafloor_dives_by_tod_boxplot_2025Feb25_v4.png"),
+ggsave(here("outputs","seafloor_depth_plots","dive_rates_seafloor_dives_by_tod_boxplot_2025Oct19.png"),
        width = 5, height = 3, units = "in")
 
 
@@ -119,7 +124,7 @@ ggsave(here("outputs","seafloor_depth_plots","dive_rates_seafloor_dives_by_tod_b
 
 # read in the regular pseudotrack to get mean estimated position 
 pseu <- readRDS(here("pipeline","clean_data_for_analysis",
-                     "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                     "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct17.rds"))
 
 # assign dive ID for each tag to use to filter the other dies
 dives_pseu <- filter(pseu, What == "Dive") %>%
@@ -131,14 +136,18 @@ dives_pseu <- filter(pseu, What == "Dive") %>%
 
 # get sf points of probable seafloor dives for mapping
 dd_sd100_sf <- dives_pseu %>%
-  filter(., dive_id2 %in% dives_100sd$dive_id2) %>%
+  filter(., dive_id2 %in% dives_100sd_abs$dive_id2) %>%
   st_as_sf(., coords = c("lon","lat"), crs = 4326)
 
 # make time of day an ordered factor 
 dd_sd100_sf$tod <- factor(dd_sd100_sf$tod, levels = c("dawn","day","dusk","night"))
 
 # get the seafloor depth summaries 
-dd_sd100_sf <- left_join(dd_sd100_sf, dives_100sd[,c(1,2,7:14)], by = c("DeployID","dive_id2"))
+dd_sd100_sf <- left_join(dd_sd100_sf, dives_100sd_abs[,c(1,2,7:15)], by = c("DeployID","dive_id2"))
+
+# quick map of the deep dives 
+deep <- filter(dd_sd100_sf, depth_avg50 > 1000)
+mapview::mapview(deep)
 
 ## map objects ## ------------------------------------------------------------- ##
 
@@ -182,6 +191,7 @@ hexbins <- st_join(dd_sd100_sf2, hex_grid, join = st_intersects) %>%
   group_by(hexid) %>% 
   summarise(n = n(),
             mean_depth = mean(depth_avg50),
+            mean_prop = mean(prop_dive_sf),
             mean_dur = mean(dur_mins)) %>% 
   right_join(hex_grid, by = "hexid") %>% 
   sf::st_sf()
@@ -192,6 +202,7 @@ hexbins$prop <- hexbins$n/133
 
 # color palette
 pal <- PNWColors::pnw_palette("Shuksan",100)
+mush <- PNWColors::pnw_palette("Mushroom",100)
 
 # number of dives oahu to hi
 hioahu_n <- ggplot() +
@@ -202,7 +213,7 @@ hioahu_n <- ggplot() +
   geom_sf(data = hexbins, aes(fill = n), color = "gray34") +
   
   # coastline
-  geom_sf(data = coast, color = "gray19", fill = "gray19") +
+  geom_sf(data = coast, color = "gray50", fill = "gray19") +
   
   # aesthetics
   scale_fill_gradientn(colours = rev(pal)) +
@@ -235,7 +246,7 @@ kaunihoa_n <- ggplot() +
   geom_sf(data = hexbins, aes(fill = n), color = "gray34") +
   
   # coastline
-  geom_sf(data = coast, color = "gray19", fill = "gray19") +
+  geom_sf(data = coast, color = "gray50", fill = "gray19") +
   
   # aesthetics
   scale_fill_gradientn(colours = rev(pal)) +
@@ -251,7 +262,7 @@ kaunihoa_n <- ggplot() +
   theme(
     axis.text = element_text(color = "black", size = 10),
     #legend.position = c(.1,.3),
-    legend.position = "none",
+    #legend.position = "none",
     legend.text = element_text(size = 10, color = "black"),
     legend.background = element_rect(fill = "white", color = "black")
   ) +
@@ -269,7 +280,7 @@ hioahu_depth <- ggplot() +
   geom_sf(data = hexbins, aes(fill = -mean_depth), color = "gray34") +
   
   # coastline
-  geom_sf(data = coast, color = "gray19", fill = "gray19") +
+  geom_sf(data = coast, color = "gray50", fill = "gray19") +
   
   # aesthetics
   scale_fill_viridis_c(option = "G", direction = 1) +
@@ -284,7 +295,7 @@ hioahu_depth <- ggplot() +
   theme(
     axis.text = element_text(color = "black", size = 10),
     #legend.position = c(.1,.3),
-    #legend.position = "none",
+    legend.position = "none",
     legend.text = element_text(size = 10, color = "black"),
     legend.background = element_rect(fill = "white", color = NA)
   ) +
@@ -293,9 +304,9 @@ hioahu_depth <- ggplot() +
 
 hioahu_depth
 
-ggsave(here("outputs","seafloor_depth_plots",
-            "hexgrid_150km_map_mean_depth_n_hioahu_probable_all_wlegend_2025Apr25.png"),
-       width = 6, height = 5, units = "in", bg = "white")
+# ggsave(here("outputs","seafloor_depth_plots",
+#             "hexgrid_150km_map_mean_depth_n_hioahu_probable_all_wlegend_2025Apr25.png"),
+#        width = 6, height = 5, units = "in", bg = "white")
 
 # now kauai to nihoa
 kaunihoa_depth <- ggplot() +
@@ -306,7 +317,7 @@ kaunihoa_depth <- ggplot() +
   geom_sf(data = hexbins, aes(fill = -mean_depth), color = "gray34") +
   
   # coastline
-  geom_sf(data = coast, color = "gray19", fill = "gray19") +
+  geom_sf(data = coast, color = "gray50", fill = "gray19") +
   
   # aesthetics
   scale_fill_viridis_c(option = "G", direction = 1) +
@@ -331,6 +342,44 @@ kaunihoa_depth <- ggplot() +
 
 kaunihoa_depth
 
+# do proportion of water column 
+hioahu_prop <- ggplot() +
+  # ESRI ocean basemap
+  annotation_map_tile(type = esri_ocean, zoomin = 1, progress = "none") +
+  
+  # hexbins
+  geom_sf(data = hexbins, aes(fill = mean_prop), color = "gray34", alpha = 0.7) +
+  
+  # coastline
+  geom_sf(data = coast, color = "gray19", fill = "gray19") +
+  
+  # aesthetics
+  #scale_fill_gradientn(colours = rev(mush)) +
+  scale_fill_viridis_c(option = "F", direction = -1) +
+  labs(fill = stringr::str_wrap("Mean ratio dive : seafloor depth", 10)) +
+  coord_sf(
+    xlim = c(-159,-154.5),
+    ylim = c(18.7,22.2),
+    crs = 4326,
+    expand = F
+  ) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 10),
+    #legend.position = c(.1,.3),
+    #legend.position = "none",
+    legend.text = element_text(size = 10, color = "black"),
+    legend.background = element_rect(fill = "white", color = NA)
+  ) +
+  ggspatial::annotation_north_arrow(location = "tr") +
+  ggspatial::annotation_scale()
+
+hioahu_prop 
+
+ggsave(here("outputs","seafloor_depth_plots",
+            "hexgrid_150km_map_mean_prop_watercol_hioahu_probable_all_wlegend_2025Oct19.png"),
+       width = 6, height = 5, units = "in", bg = "white")
+
 # combine them all
 ohis <- ggarrange(hioahu_n, hioahu_depth,
                   nrow = 2, ncol = 1)
@@ -342,7 +391,7 @@ als2 <- ggarrange(ohis, kanis, nrow = 1, ncol = 2)
 als2
 
 ggsave(here("outputs","seafloor_depth_plots",
-            "hexgrid_150km_map_mean_depth_n_hioahu_kaunihoa_probable_all_2025Feb25_v3.png"),
+            "hexgrid_150km_map_mean_depth_n_hioahu_kaunihoa_probable_all_2025Oct19.png"),
        width = 12, height = 8, units = "in", bg = "white")
 
 

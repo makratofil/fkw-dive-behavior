@@ -2,7 +2,7 @@
 ## for manuscript
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 Apr 2025
+## Updated: 15 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -20,10 +20,10 @@ library(ggpubr)
 ## dive depth ## ------------------------------------------------------------- ##
 
 # read in the original data that was formatted in the model script
-dives_pop <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_model_ff_data_2025Feb21.rds"))
+dives_pop <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_model_ff_data_2025Oct13.rds"))
 
 # read in the spatiotemporal model 
-depth_pop_gs <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_depth_pop_gs_2025Feb21.rds"))
+depth_pop_gs <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_depth_pop_gs_2025Oct14.rds"))
 
 ## time of day (hms) ## 
 
@@ -32,7 +32,7 @@ depth_pop_gs_hms_preds <- plot_predictions(depth_pop_gs, condition = "hms_n", ty
                                            draw = F)
 
 # get the same curve but from the temporal-only predictors model 
-depth_t_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_depth_gs_2025Feb20.rds"))
+depth_t_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_depth_gs_2025Oct14.rds"))
 depth_gs_hms_preds <- plot_predictions(depth_t_gs, condition = "hms_n", type = "response",
                                        draw = F)
 
@@ -78,7 +78,7 @@ depth_pop_gs_hms_id_preds <- plot_predictions(depth_pop_gs, condition = c("hms_n
                                               draw = F)
 
 # color by population
-id_pop_pal <- c(rep("#015b58",6),rep("#89689d",3),rep("#e69b99",3))
+id_pop_pal <- c(rep("#015b58",8),rep("#89689d",5),rep("#e69b99",3))
 
 # get the same curves but from the temporal predictors only model
 depth_gs_hms_id_preds <- plot_predictions(depth_t_gs, condition = c("hms_n","DeployID"), type = "response",
@@ -114,6 +114,52 @@ depo_id_line <- ggplot(dives_pop, aes(x = hms_n, y = depth_avg50)) +
     strip.text = element_text(size = 11)
   )
 depo_id_line
+
+## combine global hms and id x hms ## 
+
+depo_hms_comb <- ggplot(dives_pop, aes(x = hms_n, y = depth_avg50)) +
+  
+  # observed points
+  geom_rug(sides = "b") +
+  
+  # predicted estimates for spatiotemporal + temporal model
+  geom_line(aes(y = estimate, color = DeployID), data = depth_pop_gs_hms_id_preds, linewidth = .5,
+            alpha = 0.75) +
+  geom_line(aes(y = estimate, color = DeployID), data = depth_gs_hms_id_preds, linewidth = .5,
+            alpha = 0.3, linetype = "dashed") +
+  
+  # confidence ribbon for full/spatiotemporal model
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=hms_n), data = depth_pop_gs_hms_preds,
+              alpha = 0.2, color = NA) +
+  
+  # confidence ribbon for temporal predictors only model
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=hms_n), data = depth_gs_hms_preds,
+              fill = NA, color = "gray39", linetype = "dashed") +
+  
+  # estimated line/relationship for spatiotemporal + temporal-predictors only model
+  geom_line(aes(y = estimate), data = depth_pop_gs_hms_preds, linewidth = 1) +
+  geom_line(aes(y = estimate), data = depth_gs_hms_preds, linetype = "dashed", linewidth = 1) +
+  
+  # aesthetics
+  scale_color_manual(values = id_pop_pal) +
+  theme_bw() +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(50,875),
+                     breaks = seq(50,800, by = 100)) +
+  scale_x_continuous(
+    limits = c(0,86400),
+    breaks = c(01,21600,43200,64800,86399),
+    labels = c("00:01","06:00","12:00","18:00","23:59")) +
+  ylab("Dive depth (m)") +
+  xlab("Time of day (HST)") +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 13, color = "black"),
+    strip.text = element_text(size = 11)
+  )
+
+depo_hms_comb
 
 ## moon phase ##
 
@@ -193,17 +239,50 @@ depo_slope <- ggplot(dives_pop, aes(x = sf_slope, y = depth_avg50)) +
   )
 depo_slope
 
-## chla ## 
-depth_pop_gs_chla_preds <- plot_predictions(depth_pop_gs, condition = "logchla", type = "response",
+## current magnitude ## 
+depth_pop_gs_cmag_preds <- plot_predictions(depth_pop_gs, condition = "curr_mag", type = "response",
                                             draw = F)
 
-## chla, zoomed in to the effect ## 
-depo_chla <- ggplot(dives_pop, aes(x = logchla, y = depth_avg50)) +
+depo_cmag <- ggplot(dives_pop, aes(x = curr_mag, y = depth_avg50)) +
   # observed points
   geom_rug(sides = "b") +
   
   # confidence ribbon
-  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=logchla), data = depth_pop_gs_chla_preds,
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=curr_mag), data = depth_pop_gs_cmag_preds,
+              alpha = 0.2, color = NA) +
+  
+  # predicted estimates
+  geom_line(aes(y = estimate), data = depth_pop_gs_cmag_preds, linewidth = 1) +
+  
+  # aesthetics
+  theme_bw() +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(75,650),
+                     breaks = seq(100,600, by = 100)) +
+  # scale_x_continuous(
+  #   breaks = seq(0,40,  by = 10)) +
+  ylab("Dive depth (m)") +
+  xlab("Current magnitude (m/s)") +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 13, color = "black"),
+    strip.text = element_text(size = 11)
+  )
+
+depo_cmag
+
+## chla ## 
+depth_pop_gs_chla_preds <- plot_predictions(depth_pop_gs, condition = "logchla30d", type = "response",
+                                            draw = F)
+
+## chla, zoomed in to the effect ## 
+depo_chla <- ggplot(dives_pop, aes(x = logchla30d, y = depth_avg50)) +
+  # observed points
+  geom_rug(sides = "b") +
+  
+  # confidence ribbon
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=logchla30d), data = depth_pop_gs_chla_preds,
               alpha = 0.2, color = NA) +
   
   # predicted estimates
@@ -212,10 +291,10 @@ depo_chla <- ggplot(dives_pop, aes(x = logchla, y = depth_avg50)) +
   # aesthetics
   theme_bw() +
   scale_y_continuous(expand = c(0,0),
-                     limits = c(50,600),
-                     breaks = seq(50,600, by = 100)) +
+                     limits = c(25,850),
+                     breaks = seq(50,800, by = 100)) +
   ylab("Dive depth (m)") +
-  xlab(bquote('log10(Chlorophyll-a ('*mg^3*'))')) +
+  xlab(bquote('log10(30-d lag chlorophyll-a ('*mg^3*'))')) +
   theme(
     legend.position = "none",
     axis.text = element_text(size = 11, color = "black"),
@@ -256,21 +335,25 @@ depo_mld <- ggplot(dives_pop, aes(x = mld, y = depth_avg50)) +
 depo_mld
 
 # arrange
-depo <- ggarrange(depo_hms, depo_id_line, depo_moon, depo_slope, depo_chla, depo_mld)
+depo <- ggarrange(depo_hms, depo_id_line, depo_moon, depo_slope, depo_cmag, depo_chla, depo_mld)
+depo
+
+# try a six version
+depo <- ggarrange(depo_hms_comb, depo_moon, depo_slope, depo_cmag, depo_chla, depo_mld)
 depo
 
 ggsave(here("outputs","gamm_plots","spatiotemporal_gamm_population_P09",
-            "depth_gamm_spatiotemporal_population_wP09_gs_ff_all_predplot_2025Mar15.png"),
+            "depth_gamm_spatiotemporal_population_wP09_gs_ff_all_predplot_2025Oct15.png"),
        width = 12, height = 6, units = "in")
 
 
 ## dive duration ## ---------------------------------------------------------- ## 
 
 # read in full spatiotemporal model
-dur_pop_gs <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_duration_pop_gs_2025Feb21.rds"))
+dur_pop_gs <- readRDS(here("pipeline","gamm_models","spatiotemporal_gamms_allpops_ff_duration_pop_gs_2025Oct14.rds"))
 
 # read in the temporal predictors only model
-dur_t_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_gs_2025Feb20.rds"))
+dur_t_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_gs_2025Oct14.rds"))
 
 ## hms/time of day ## 
 
@@ -326,7 +409,7 @@ dur_gs_hms_id_preds <- plot_predictions(dur_t_gs, condition = c("hms_n","DeployI
                                             draw = F)
 
 # color by population
-id_pop_pal <- c(rep("#015b58",6),rep("#89689d",3),rep("#e69b99",3))
+id_pop_pal <- c(rep("#015b58",8),rep("#89689d",5),rep("#e69b99",3))
 
 dupo_id_line <- ggplot(dives_pop, aes(x = hms_n, y = dur_secs)) +
   
@@ -361,6 +444,52 @@ dupo_id_line <- ggplot(dives_pop, aes(x = hms_n, y = dur_secs)) +
   )
 
 dupo_id_line
+
+## combined global hms and id x hms ## 
+dupo_hms_comb <- ggplot(dives_pop, aes(x = hms_n, y = dur_secs)) +
+  
+  # observed points
+  geom_rug(sides = "b") +
+  
+  # predicted estimates for spatiotemporal and temporal only models
+  geom_line(aes(y = estimate, color = DeployID), data = dur_pop_gs_hms_id_preds, linewidth = .5,
+            alpha = 0.75) +
+  geom_line(aes(y = estimate, color = DeployID), data = dur_gs_hms_id_preds, linewidth = .5,
+            alpha = 0.3, linetype = "dashed") +
+  
+  # confidence ribbons 
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=hms_n), data = dur_pop_gs_hms_preds,
+              alpha = 0.2, color = NA) +
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=hms_n), data = dur_gs_hms_preds,
+              fill = NA, linetype = "dashed", color = "gray39") +
+  
+  # predicted estimates
+  geom_line(aes(y = estimate), data = dur_pop_gs_hms_preds, linewidth = 1) +
+  geom_line(aes(y = estimate), data = dur_gs_hms_preds, linewidth = .75,
+            linetype = "dashed") +
+  
+  # aesthetics
+  scale_color_manual(values = id_pop_pal) +
+  theme_bw() +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(175,750),
+                     breaks = seq(180,660,by=120),
+                     labels = c("3","5","7","9","11")
+  ) +
+  scale_x_continuous(
+    limits = c(0,86400),
+    breaks = c(01,21600,43200,64800,86399),
+    labels = c("00:01","06:00","12:00","18:00","23:59")) +
+  ylab("Dive duration (min)") +
+  xlab("Time of day (HST)") +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 13, color = "black"),
+    strip.text = element_text(size = 11)
+  )
+
+dupo_hms_comb
 
 ## moon phase ##
 
@@ -441,16 +570,50 @@ dupo_slope <- ggplot(dives_pop, aes(x = sf_slope, y = dur_secs)) +
   )
 dupo_slope
 
-## chla ## 
-dur_pop_gs_chla_preds <- plot_predictions(dur_pop_gs, condition = "logchla", type = "response",
-                                          draw = F)
-## chla, zoomed in to the effect ## 
-dupo_chla <- ggplot(dives_pop, aes(x = logchla, y = dur_secs)) +
+## current magnitude ## 
+dur_pop_gs_cmag_preds <- plot_predictions(dur_pop_gs, condition = "curr_mag", type = "response",
+                                           draw = F)
+
+dupo_cmag <- ggplot(dives_pop, aes(x = curr_mag, y = dur_secs)) +
   # observed points
   geom_rug(sides = "b") +
   
   # confidence ribbon
-  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=logchla), data = dur_pop_gs_chla_preds,
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=curr_mag), data = dur_pop_gs_cmag_preds,
+              alpha = 0.2, color = NA) +
+  
+  # predicted estimates
+  geom_line(aes(y = estimate), data = dur_pop_gs_cmag_preds, linewidth = 1) +
+  
+  # aesthetics
+  theme_bw() +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(175,470),
+                     breaks = seq(180,450,by=60),
+                     labels = c("3","4","5","6","7")) +
+  # scale_x_continuous(
+  #   breaks = seq(0,40,  by = 10)) +
+  ylab("Dive duration (min)") +
+  xlab("Current magnitude (m/s)") +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 13, color = "black"),
+    strip.text = element_text(size = 11)
+  )
+dupo_cmag
+
+
+## chla ## 
+dur_pop_gs_chla_preds <- plot_predictions(dur_pop_gs, condition = "logchla30d", type = "response",
+                                          draw = F)
+## chla, zoomed in to the effect ## 
+dupo_chla <- ggplot(dives_pop, aes(x = logchla30d, y = dur_secs)) +
+  # observed points
+  geom_rug(sides = "b") +
+  
+  # confidence ribbon
+  geom_ribbon(aes(ymin=conf.low, ymax = conf.high,x=logchla30d), data = dur_pop_gs_chla_preds,
               alpha = 0.2, color = NA) +
   
   # predicted estimates
@@ -459,12 +622,12 @@ dupo_chla <- ggplot(dives_pop, aes(x = logchla, y = dur_secs)) +
   # aesthetics
   theme_bw() +
   scale_y_continuous(expand = c(0,0),
-                     limits = c(200,600),
-                     breaks = seq(240,540,by=60),
-                     labels = c("4","5","6","7","8","9")
+                     limits = c(150,600),
+                     breaks = seq(180,540,by=60),
+                     labels = c("3", "4","5","6","7","8","9")
                      ) +
   ylab("Dive duration (min)") +
-  xlab(bquote('log10(Chlorophyll-a ('*mg^3*'))')) +
+  xlab(bquote('log10(30-d lag chlorophyll-a ('*mg^3*'))')) +
   theme(
     legend.position = "none",
     axis.text = element_text(size = 11, color = "black"),
@@ -505,20 +668,20 @@ dupo_mld <- ggplot(dives_pop, aes(x = mld, y = dur_secs)) +
 dupo_mld
 
 # arrange
-dupo <- ggarrange(dupo_hms, dupo_id_line, dupo_moon, dupo_slope, dupo_chla, dupo_mld)
+dupo <- ggarrange(dupo_hms_comb, dupo_moon, dupo_slope, dupo_cmag, dupo_chla, dupo_mld)
 dupo
 
 ggsave(here("outputs","gamm_plots","spatiotemporal_gamm_population_P09",
-            "duration_gamm_spatiotemporal_population_wP09_gs_ff_all_predplot_2025Mar15.png"),
+            "duration_gamm_spatiotemporal_population_wP09_gs_ff_all_predplot_2025Oct15.png"),
        width = 12, height = 6, units = "in")
 
 ## hourly dive rate ## -------------------------------------------------------- ##
 
 # read in the original data that was formatted in the model script
-rate_temp <- readRDS(here("pipeline","gamm_models","temporal_gamms_rate_model_data_2025Feb20.rds"))
+rate_temp <- readRDS(here("pipeline","gamm_models","temporal_gamms_rate_model_data_2025Oct14.rds"))
 
 # read in model object
-rate_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Feb20.rds"))
+rate_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Oct14.rds"))
 
 ## hour of day ## 
 
@@ -560,7 +723,7 @@ rate_gs_hod_id_preds <- plot_predictions(rate_gs, condition = c("hod","DeployID"
                                          draw = F)
 
 # population color palette
-id_pop_pal <- c(rep("#015b58",6),rep("#89689d",3),rep("#e69b99",3))
+id_pop_pal <- c(rep("#015b58",8),rep("#89689d",5),rep("#e69b99",3))
 
 rate_hod_id <- ggplot(rate_temp, aes(x = hod, y = n_dives/hrs)) +
   # observed points
@@ -629,5 +792,5 @@ rate_all
 
 
 ggsave(here("outputs","gamm_plots","temporal_gamm_P09",
-            "rate_nb_gamm_temporal_wP09_gs_all_predplot_2025Mar15.png"),
+            "rate_nb_gamm_temporal_wP09_gs_all_predplot_2025Oct15.png"),
        width = 12, height = 3, units = "in")

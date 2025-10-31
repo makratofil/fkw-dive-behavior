@@ -2,7 +2,7 @@
 ## (SPLASH) data for manuscript 
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 Apr 2025
+## Updated: 15 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -18,35 +18,37 @@ library(here)
 
 # behavior log data
 beh <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct10.rds"))
 
 # add a population column
 beh <- beh %>%
   mutate(
     population = case_when(
       DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      DeployID %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
       DeployID %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
+
 
 # make spatial
 dives <- filter(beh, What == "Dive")
 dives_sf <- st_as_sf(dives, coords = c("lon","lat"), crs = 4326)
 
 # get tag deployment locations 
-deps <- read.csv(here("data","location","PcTag001-092_DouglasFiltered_r20d3lc2_ArgosGPS_2024JUNv1.csv")) %>%
+deps <- read.csv(here("data","location","PcTag001-099_DouglasFiltered_r20d3lc2_ArgosGPS_2025OCTv1.csv")) %>%
   filter(animal %in% c("PcTag026","PcTag028","PcTag030","PcTag032",
                        "PcTag035","PcTag037","PcTag049","PcTag055",
-                       "PcTag074","PcTag090","PcTag092","PcTagP09")) %>%
+                       "PcTag074","PcTag090","PcTag092","PcTagP09",
+                       "PcTag095","PcTag096","PcTag097","PcTag099")) %>%
   filter(., LC == "DP") %>%
   st_as_sf(., coords = c("longitud","latitude"), crs = 4326) %>%
   mutate(
     population = case_when(
       animal %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      animal %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      animal %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
       animal %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
@@ -87,7 +89,7 @@ ggplot() +
   scale_color_manual(values = c("#015b58","#89689d","#e69b99")) +
   
   # MOTE locations
-  geom_sf(data = motes, shape = 8, color = "white", size = 1) +
+  geom_sf(data = motes, shape = 8, color = "white", size = 1.5) +
   
   # aesthetics
   coord_sf(crs = 4326,
@@ -105,7 +107,7 @@ ggplot() +
   ggspatial::annotation_north_arrow(location = "tr") +
   ggspatial::annotation_scale(location = "br")
 
-ggsave(here("outputs","misc_plots","map_dive_locs_colored_bypop_mhi_nwhi_region_2025Feb21.png"),
+ggsave(here("outputs","misc_plots","map_dive_locs_colored_bypop_mhi_nwhi_region_2025Oct10.png"),
        width = 8, height = 6, units = "in")
 
 ## PcTagP09 map ## ----------------------------------------------------------- ##
@@ -152,6 +154,14 @@ ggsave(here("outputs","misc_plots","map_dive_locs_colored_bypop_PcTagP09_region_
        width = 6, height = 3, units = "in", bg = "transparent")
 
 ## make gridded data summary maps ## ----------------------------------------- ##
+
+# check the west most extent for new NWHI tags
+n <- dives %>%
+  filter(DeployID %in% c("PcTag096","PcTag097")) %>%
+  summarise(
+    minlon = min(lon),
+    maxlon = max(lon)
+  )
 
 # first transform to UTM
 dives_sf <- st_transform(dives_sf, crs = 3857)
@@ -200,15 +210,18 @@ hexbins_sub2 <- st_crop(hexbins_sub, xmin = -164, xmax = -154.5,
                         ymin = 18, ymax = 24)
 
 # save for later 
-save(coast, hexbins_sub2, file = here("pipeline","data_for_nwhi_mhi_gridded_dive_maps_750km2_2025Apr29.RData"))
+save(coast, hexbins_sub2, file = here("pipeline","data_for_nwhi_mhi_gridded_dive_maps_750km2_2025Oct10.RData"))
 
 # CV dive depth
 ggplot() +
   # hexbins
   geom_sf(data = hexbins_sub2, aes(fill = cv_depth*100), color = "gray64", alpha = 0.9) +
+  #geom_sf(data = hexbins_sub2, aes(fill = cv_depth*100), color = NA, alpha = 0.6) +
   
   # coastline
-  geom_sf(data = coast, fill = "gray19", color = "gray19") +
+  #geom_sf(data = coast, fill = "gray19", color = "gray19") +
+  geom_sf(data = coast, fill = "gray19", color = "gray50") +
+  #geom_sf(data = coast, fill = "gray90", color = "gray19") +
   
   # aesthetics
   scale_fill_gradientn(colours = rev(pal2), na.value = NA) +
@@ -225,18 +238,23 @@ ggplot() +
     legend.background = element_rect(fill = "white", color = "black")
   ) +
   ggspatial::annotation_north_arrow(location = "tr") +
-  ggspatial::annotation_scale()
+  ggspatial::annotation_scale(text_cex = 0.9)
 
-ggsave(here("outputs","misc_plots","map_dive_grid_cvdepth_nwhi-mhi_region_2025Mar18.png"),
+ggsave(here("outputs","misc_plots","map_dive_grid_cvdepth_nwhi-mhi_region_2025Oct10v5.png"),
+       width = 7.5, height = 5, units = "in")
+
+ggsave(here("outputs","misc_plots","map_dive_grid_cvdepth_nwhi-mhi_region_2025Oct10v5.pdf"),
        width = 7.5, height = 5, units = "in")
 
 # mean dive depth 
 ggplot() +
   # hexbins
   geom_sf(data = hexbins_sub2, aes(fill = -mean_depth), color = "gray64", alpha = 0.9) +
+  #geom_sf(data = hexbins_sub2, aes(fill = -mean_depth), color = NA, alpha = 0.6) +
   
   # coastline
-  geom_sf(data = coast, fill = "gray19", color = "gray19") +
+  geom_sf(data = coast, fill = "gray19", color = "gray50") +
+  #geom_sf(data = coast, fill = "gray90", color = "gray19") +
   
   # aesthetics
   scale_fill_viridis_c(option = "G", na.value = NA, direction = 1) +
@@ -253,18 +271,24 @@ ggplot() +
     legend.background = element_rect(fill = "white", color = "black")
   ) +
   ggspatial::annotation_north_arrow(location = "tr") +
-  ggspatial::annotation_scale()
+  ggspatial::annotation_scale(text_cex = 0.9)
 
-ggsave(here("outputs","misc_plots","map_dive_grid_meandepth_nwhi-mhi_region_2025Mar18.png"),
+ggsave(here("outputs","misc_plots","map_dive_grid_meandepth_nwhi-mhi_region_2025Oct10v5.png"),
+       width = 7.5, height = 5, units = "in")
+
+ggsave(here("outputs","misc_plots","map_dive_grid_meandepth_nwhi-mhi_region_2025Oct10v5.pdf"),
        width = 7.5, height = 5, units = "in")
 
 # max dive depth
 ggplot() +
   # hexbins
   geom_sf(data = hexbins_sub2, aes(fill = -max_depth), color = "gray64", alpha = 0.9) +
+  #geom_sf(data = hexbins_sub2, aes(fill = -max_depth), color = NA, alpha = 0.6) +
   
   # coastline
-  geom_sf(data = coast, fill = "gray19", color = "gray19") +
+  geom_sf(data = coast, fill = "gray19", color = "gray50") +
+  #geom_sf(data = coast, fill = "gray90", color = "gray19") +
+  #geom_sf(data = coast, fill = "gray69", color = "gray19") +
   
   # aesthetics
   scale_fill_viridis_c(option = "G", na.value = NA, direction = 1) +
@@ -282,18 +306,24 @@ ggplot() +
     legend.background = element_rect(fill = "white", color = "black")
   ) +
   ggspatial::annotation_north_arrow(location = "tr") +
-  ggspatial::annotation_scale()
+  ggspatial::annotation_scale(text_cex = 0.9)
 
-ggsave(here("outputs","misc_plots","map_dive_grid_maxdepth_nwhi-mhi_region_2025Mar18.png"),
+ggsave(here("outputs","misc_plots","map_dive_grid_maxdepth_nwhi-mhi_region_2025Oct10v5.png"),
+       width = 7.5, height = 5, units = "in")
+
+ggsave(here("outputs","misc_plots","map_dive_grid_maxdepth_nwhi-mhi_region_2025Oct10v5.pdf"),
        width = 7.5, height = 5, units = "in")
 
 # number of dives
 ggplot() +
   # hexbins
   geom_sf(data = hexbins_sub2, aes(fill = n), color = "gray64") +
+  #geom_sf(data = hexbins_sub2, aes(fill = n), color = NA, alpha = 0.99) +
   
   # coastline
-  geom_sf(data = coast, fill = "gray19", color = "gray19") +
+  geom_sf(data = coast, fill = "gray19", color = "gray50") +
+  #geom_sf(data = coast, fill = "gray90", color = "gray19") +
+  #geom_sf(data = coast, fill = "gray69", color = "gray19") +
   
   # aesthetics
   scale_fill_gradientn(colours = rev(pal), na.value = NA) +
@@ -310,8 +340,10 @@ ggplot() +
     legend.background = element_rect(fill = "white", color = "black")
   ) +
   ggspatial::annotation_north_arrow(location = "tr") +
-  ggspatial::annotation_scale()
+  ggspatial::annotation_scale(text_cex = 0.9)
 
-ggsave(here("outputs","misc_plots","map_dive_grid_ndives_nwhi-mhi_region_2025Mar18.png"),
+ggsave(here("outputs","misc_plots","map_dive_grid_ndives_nwhi-mhi_region_2025Oct10v5.png"),
        width = 7.5, height = 5, units = "in")
 
+ggsave(here("outputs","misc_plots","map_dive_grid_ndives_nwhi-mhi_region_2025Oct10v5.pdf"),
+       width = 7.5, height = 5, units = "in")

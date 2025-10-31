@@ -2,7 +2,7 @@
 ## data figures 
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 Apr 2025
+## Updated: 30 Oct 2025
 
 ## ---------------------------------------------------------------------------- ##
 
@@ -10,10 +10,11 @@
 library(dplyr)
 library(lubridate)
 library(ggplot2)
+library(ggpubr)
 library(here)
 
 ## read in and prep data ## --------------------------------------------------- ##
-load(here("pipeline","splash_data_summary_objects_for_figures_2025Apr29.RData"))
+load(here("pipeline","splash_data_summary_objects_for_figures_2025Oct10.RData"))
 
 ## proportion of dives within depth bins for each ID ## ----------------------- ##
 dives <- dives %>%
@@ -64,8 +65,8 @@ depth_bin_sum <- depth_bin_sum %>%
   mutate(
     population = case_when(
       DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      DeployID %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
       DeployID %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
@@ -78,11 +79,32 @@ depth_bin_sum %>%
     sum = sum(prop)
   )
 
+# create a new ID column that includes sample size 
+depth_bin_sum$dep_n <- paste0(depth_bin_sum$DeployID, " (n = ", depth_bin_sum$n_dives,")")
+depth_bin_sum$dep_n <- factor(depth_bin_sum$dep_n, levels = c("PcTag026 (n = 69)",
+                                                              "PcTag028 (n = 281)",
+                                                              "PcTag030 (n = 303)",
+                                                              "PcTag032 (n = 170)",
+                                                              "PcTag055 (n = 57)",
+                                                              "PcTag074 (n = 84)",
+                                                              "PcTag095 (n = 264)",
+                                                              "PcTag099 (n = 191)",
+                                                              "PcTag035 (n = 53)",
+                                                              "PcTag037 (n = 96)",
+                                                              "PcTag049 (n = 212)",
+                                                              "PcTag096 (n = 70)",
+                                                              "PcTag097 (n = 79)",
+                                                              "PcTag090 (n = 45)",
+                                                              "PcTag092 (n = 32)",
+                                                              "PcTagP09 (n = 106)"))
+
+summary(depth_bin_sum$dep_n)
+
 # now plot 
 ggplot(depth_bin_sum, aes(y = depth_bin, x = prop, fill = population)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = c("#015b58","#89689d","#e69b99")) +
-  facet_wrap(~DeployID, nrow = 3, ncol = 4) +
+  facet_wrap(~dep_n) +
   xlab("Proportion of dives") +
   ylab("Depth bin (m)") +
   scale_x_continuous(limits = c(0,0.5),
@@ -99,7 +121,7 @@ ggplot(depth_bin_sum, aes(y = depth_bin, x = prop, fill = population)) +
     strip.background = element_rect(fill = NA)
   )
 
-ggsave(here("outputs","misc_plots","dive_bin_prop_byid_bypopulation_v7.png"), width = 9, height = 8, units = "in")
+#ggsave(here("outputs","misc_plots","dive_bin_prop_byid_bypopulation_v9.png"), width = 9, height = 9, units = "in")
 
 
 ## dive depth vs duration ## ------------------------------------------------- ##
@@ -130,16 +152,17 @@ ggplot(dives, aes(x = dur_mins, y = -depth_avg50, color = population)) +
   )
 
 
-ggsave(here("outputs","misc_plots","dive_depth_dur_point_lmline_byid_pop_2025Apr27.png"), width = 12, height = 7.5, units = "in")
+#ggsave(here("outputs","misc_plots","dive_depth_dur_point_lmline_byid_pop_2025Oct10.png"), width = 12, height = 8.5, units = "in")
 
 
 ## dive depth and duration by ID and sex ## ----------------------------------- ##
 
 # order ID by sex 
-dives$DeployID_s <- factor(dives$DeployID, levels = c("PcTag090","PcTag092","PcTag026",
+dives$DeployID_s <- factor(dives$DeployID, levels = c("PcTag090","PcTag092","PcTag095","PcTag026",
                                                       "PcTag032","PcTag035","PcTag037",
-                                                      "PcTag055","PcTagP09","PcTag028",
-                                                      "PcTag030","PcTag049","PcTag074"))
+                                                      "PcTag055","PcTagP09","PcTag099","PcTag028",
+                                                      "PcTag030","PcTag049","PcTag074",
+                                                      "PcTag096","PcTag097"))
 
 # dive depth
 dds <- ggplot(dives, aes(x = DeployID_s, y = -depth_avg50, fill = sex)) +
@@ -161,7 +184,7 @@ dds <- ggplot(dives, aes(x = DeployID_s, y = -depth_avg50, fill = sex)) +
     legend.title = element_blank()
   )
 dds
-ggsave(here("outputs","misc_plots","dive_depth_byid_bysex_v2.png"), width = 7, height = 5, units = "in")
+#ggsave(here("outputs","misc_plots","dive_depth_byid_bysex_v3.png"), width = 7, height = 5, units = "in")
 
 # dive duration 
 ddus <- ggplot(dives, aes(x = DeployID_s, y = dur_mins, fill = sex)) +
@@ -183,12 +206,13 @@ ddus <- ggplot(dives, aes(x = DeployID_s, y = dur_mins, fill = sex)) +
     legend.title = element_blank()
   )
 ddus
-ggsave(here("outputs","misc_plots","dive_dur_byid_bysex_v2.png"), width = 7, height = 5, units = "in")
 
 # arrange 
 ggarrange(dds, ddus, ncol = 1, nrow = 2, labels = c("(a)","(b)"), common.legend = T)
-ggsave(here("outputs","misc_plots","dive_depth_dur_byid_bysex_v4.png"), width = 7, height = 7, units = "in",
-       bg = "white")
+
+# save
+# ggsave(here("outputs","misc_plots","dive_depth_dur_byid_bysex_v5.png"), width = 7, height = 7, units = "in",
+#        bg = "white")
 
 ## dive rate by diel period ## ----------------------------------------------- ## 
 ggplot(merge_tod, aes(x = tod, y = rate)) +
@@ -198,18 +222,160 @@ ggplot(merge_tod, aes(x = tod, y = rate)) +
   labs(fill = "") +
   theme_bw() +
   theme(
-    axis.text = element_text(color = "black", size = 11),
+    axis.text = element_text(color = "black", size = 12),
     legend.position = "none",
-    axis.title = element_text(color = "black", size = 13)
+    axis.title = element_text(color = "black", size = 14)
   )
 
-ggsave(here("outputs","misc_plots","dive_rate_tod_boxplot_across_indv_bw_v1.png"), width = 5, height = 5, units = "in")
+#ggsave(here("outputs","misc_plots","dive_rate_tod_boxplot_across_indv_bw_v2.png"), width = 5, height = 5, units = "in")
+#ggsave(here("outputs","misc_plots","dive_rate_tod_boxplot_across_indv_bw_v2.pdf"), width = 5, height = 5, units = "in")
+
+## dive metrics by shape and diel period ## ---------------------------------- ##
+
+# summarize median dive depth, duration for each tag 
+shape_tod <- dives %>%
+  group_by(DeployID, tod, Shape) %>%
+  summarise(
+    med_depth = median(depth_avg50),
+    med_dur = median(dur_mins),
+    count = n()
+  )
+
+# reshape the time of day dataframe to get count of shape for rates  
+merge_tod_shape <- merge_tod %>%
+  tidyr::pivot_longer(cols = U:Square,
+                      names_to = "shape",
+                      values_to = "count") %>%
+  mutate(
+    shape_rate = count/tot_hrs
+  )
+
+# depth
+shaped <- ggplot(shape_tod, aes(x = Shape, y = -med_depth, fill = tod)) +
+  geom_boxplot(outlier.shape = NA) +
+  ylab("Median dive depth (m)") +
+  xlab("") +
+  scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  geom_point(data = shape_tod, alpha = 0.6,shape = 21,color = "gray39", aes(fill = tod, x = Shape, y = -med_depth),
+               position = position_jitterdodge(jitter.width = 0.1)) +
+  scale_color_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  labs(fill = "") +
+  theme_bw() +
+  scale_y_continuous(breaks = c(-1250,-1000,-750,-500,-250,0),
+                     limits = c(-1100,0)) +
+  theme(
+    axis.text = element_text(color = "black", size = 11),
+    #legend.position = "none",
+    axis.title = element_text(color = "black", size = 13)
+  ) 
+shaped
+# ggsave(here("outputs","misc_plots","grand_dive_depth_shape_tod_boxplot_across_indv_v1.png"),
+#        width = 5.25, height = 3.65, units = "in")
+
+# duration
+shapedu <- ggplot(shape_tod, aes(x = Shape, y = med_dur, fill = tod)) +
+  geom_boxplot(aes(fill = tod), outlier.shape = NA) +
+  geom_point(data = shape_tod, alpha = 0.6,shape = 21,color = "gray39", aes(fill = tod, x = Shape, y = med_dur),
+             position = position_jitterdodge(jitter.width = 0.1)) +
+  ylab("Median dive duration (min)") +
+  xlab("") +
+  labs(fill = "") +
+  scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 11),
+    #legend.position = "none",
+    axis.title = element_text(color = "black", size = 13)
+  ) #+
+  #facet_wrap(~tod)
+shapedu
+# ggsave(here("outputs","misc_plots","grand_dive_duration_shape_tod_boxplot_across_indv_v1.png"),
+#        width = 5, height = 3.55, units = "in")
+
+# rate
+shaper <- ggplot(merge_tod_shape, aes(x = shape, y = shape_rate, fill = tod)) +
+  geom_boxplot(aes(fill = tod), position = position_dodge(), outlier.shape = NA) +
+  ylab("Dive rate (# dives/hr)") +
+  geom_point(data = merge_tod_shape, alpha = 0.6,shape = 21,color = "gray39", aes(fill = tod, x = shape, y = shape_rate),
+             position = position_jitterdodge(jitter.width = 0.1)) +
+  xlab("") +
+  labs(fill = "") +
+  scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 11),
+    #legend.position = "none",
+    axis.title = element_text(color = "black", size = 13)
+  ) #+
+#facet_wrap(~tod)
+shaper
+# ggsave(here("outputs","misc_plots","grand_dive_rate_shape_tod_boxplot_across_indv_v1.png"),
+#        width = 5, height = 3.5, units = "in")
+
+# number of dives 
+shapen <- ggplot(shape_tod, aes(x = Shape, y = count, fill = tod)) +
+  geom_boxplot(aes(fill = tod), position = position_dodge(),
+               outlier.shape = NA) +
+  geom_point(data = shape_tod, alpha = 0.6,shape = 21,color = "gray39", aes(fill = tod, x = Shape, y = count),
+             position = position_jitterdodge(jitter.width = 0.1)) +
+  ylab("# Dives") +
+  xlab("") +
+  labs(fill = "") +
+  scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 11),
+    #legend.position = "none",
+    axis.title = element_text(color = "black", size = 13)
+  ) #+
+#facet_wrap(~tod)
+shapen
+# ggsave(here("outputs","misc_plots","dive_count_shape_tod_boxplot_across_indv_v1.png"),
+#        width = 5, height = 3.5, units = "in")
+
+# arrange the top four 
+ggpubr::ggarrange(shapen, shaped, shapedu, shaper, ncol = 2, nrow = 2, common.legend = T,
+                  legend = "top", labels = c("(a)","(b)","(c)","(d)"))
+
+
+
+# reshape the dataframe to plot proportion of dives
+merge_tod_shape2 <- merge_tod %>%
+  tidyr::pivot_longer(cols = prop_u:prop_v,
+                      names_to = "Shape",
+                      values_to = "prop") 
+
+# recode
+merge_tod_shape2$Shape <- recode(merge_tod_shape2$Shape,
+                                prop_u = "U",
+                                prop_v = "V",
+                                prop_sq = "Square")
+
+ggplot(merge_tod_shape2, aes(x = Shape, y = prop, fill = tod)) +
+  geom_boxplot(aes(fill = tod), position = position_dodge(),
+               outlier.shape = NA) +
+  geom_point(data = merge_tod_shape2, alpha = 0.6,shape = 21,color = "gray39", aes(fill = tod, x = Shape, y = prop),
+             position = position_jitterdodge(jitter.width = 0.1)) +
+  ylab("Proportion of dives") +
+  xlab("") +
+  labs(fill = "") +
+  scale_fill_manual(values = c("#f8e3d1","#fefbe9","#f5f5f5","#81a9ad")) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 11),
+    #legend.position = "none",
+    axis.title = element_text(color = "black", size = 13)
+  ) #+
+#facet_wrap(~tod)
+
+# ggsave(here("outputs","misc_plots","dive_prop_shape_tod_boxplot_across_indv_v1.png"),
+#        width = 5, height = 3.55, units = "in")
 
 ## dive rate by clock hour and depth bin ## ---------------------------------- ##
 
 ## read in cleaned and processed behavior log data for HOUR of day ## 
 hod <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Oct10.rds"))
 
 # quick summary/check
 str(hod)
@@ -234,7 +400,7 @@ hod_sum <- hod %>%
   ) 
 
 # filter out dives
-dives_hod <- filter(hod, What == "Dive") # 1508 dives
+dives_hod <- filter(hod, What == "Dive") # 2112 dives
 
 # categorize dives by different depth bins 
 dives_hod <- dives_hod %>%
@@ -363,7 +529,7 @@ rate50 <- ggplot(rate_all, aes(x = as.factor(hod), y = mean_rate50)) +
         axis.ticks = element_blank(),
         title = element_text(size = 12)) +
   xlab("") +
-  ylab ("Mean dive rate (#dives/hr)") +
+  ylab ("Mean dive rate (# dives/hr)") +
   coord_polar() 
 
 rate50
@@ -388,7 +554,7 @@ rate250 <- ggplot(rate_all, aes(x = as.factor(hod), y = mean_rate250)) +
         axis.ticks = element_blank(),
         title = element_text(size = 12)) +
   xlab("") +
-  ylab ("Mean dive rate (#dives/hr)") +
+  ylab ("Mean dive rate (# dives/hr)") +
   coord_polar() 
 rate250
 
@@ -412,7 +578,7 @@ rate500 <- ggplot(rate_all, aes(x = as.factor(hod), y = mean_rate500)) +
         axis.ticks = element_blank(),
         title = element_text(size = 12)) +
   xlab("") +
-  ylab ("Mean dive rate (#dives/hr)") +
+  ylab ("Mean dive rate (# dives/hr)") +
   coord_polar() 
 rate500
 
@@ -436,13 +602,17 @@ rate750 <- ggplot(rate_all, aes(x = as.factor(hod), y = mean_rate750)) +
         axis.ticks = element_blank(),
         title = element_text(size = 12)) +
   xlab("") +
-  ylab ("Mean dive rate (#dives/hr)") +
+  ylab ("Mean dive rate (# dives/hr)") +
   coord_polar() 
 rate750
 
-# cpmbine all
-rate_clocks <- ggarrange(rate50, rate250, rate500, rate750,
-                     labels = c("(a)","(b)","(c)","(d)"))
+# combine all
+rate_clocks <- ggarrange(rate50, rate250, rate500, rate750)
 rate_clocks
-ggsave(here("outputs","clock_plots","circularplot_dive_rate_mean_by_depth_bin_yaxis_scaled_2025Feb21.png"),
-       width = 6, height = 6, units = "in", bg = "white")
+
+# save outputs
+# ggsave(here("outputs","clock_plots","circularplot_dive_rate_mean_by_depth_bin_yaxis_scaled_2025Oct10.png"),
+#        width = 6, height = 6, units = "in", bg = "white")
+# 
+# ggsave(here("outputs","clock_plots","circularplot_dive_rate_mean_by_depth_bin_yaxis_scaled_2025Oct30v2.pdf"),
+#        width = 5, height = 5, units = "in", bg = "white")

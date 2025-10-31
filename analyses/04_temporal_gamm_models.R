@@ -6,7 +6,7 @@
 ## temporal predictors
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 20 Feb 2025
+## Updated: 17 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -24,7 +24,7 @@ set.seed(123)
 
 ## read in cleaned and processed behavior log data ## ------------------------ ##
 beh <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct10.rds"))
 
 # review to make sure datetimes are already formatted 
 str(beh)
@@ -34,8 +34,8 @@ beh <- beh %>%
   mutate(
     population = case_when(
       DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      DeployID %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
       DeployID %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
@@ -69,14 +69,17 @@ cor(preds) # all under 0.5
 
 # make DeployID a factor leveled by population
 dives_temp$DeployID <- factor(dives_temp$DeployID, levels = c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                                                              "PcTag074","PcTag035","PcTag037","PcTag049",
+                                                              "PcTag074","PcTag095","PcTag099", "PcTag035","PcTag037",
+                                                              "PcTag049","PcTag096","PcTag097",
                                                               "PcTag090","PcTag092","PcTagP09"))
 
 summary(dives_temp$DeployID)
 
 # save RDS file of formatted model data
-saveRDS(dives_temp, here("pipeline","gamm_models","temporal_gamms_allpops_model_data_2025Feb20.rds"))
+saveRDS(dives_temp, here("pipeline","gamm_models","temporal_gamms_allpops_model_data_2025Oct14.rds"))
+dives_temp <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_model_data_2025Oct14.rds"))
 
+dives_sub <- filter(dives_temp, DeployID != "PcTagP09")
 
 ## GAMMs: Depth ## ----------------------------------------------------------- ##
 
@@ -105,7 +108,7 @@ draw(depth_g, scales = "fixed")
 gam.check(depth_g)
 
 # save model object
-saveRDS(depth_g, here("pipeline","gamm_models","temporal_gamms_allpops_depth_g_2025Feb20.rds"))
+saveRDS(depth_g, here("pipeline","gamm_models","temporal_gamms_allpops_depth_g_2025Oct14.rds"))
 
 ## 2. global smooth plus tag-specific smooths for time of day (similar penalties) ## 
 depth_gs <- gam(depth_avg50 ~ s(hms_n, bs = "cc", k = 5) +
@@ -130,8 +133,39 @@ appraise(depth_gs)
 draw(depth_gs, scales = "fixed")
 gam.check(depth_gs)
 
+# fit the same model with k = 5... 20 and save outputs to compare 
+for(i in 1:20){
+  # for testing 
+  #i = 5
+  
+  # print the k
+  print(paste0("k = ",i))
+  
+  # fit the model
+  gsmod <- gam(depth_avg50 ~ s(hms_n, bs = "cc", k = i) +
+                 s(moon_phase_rads, bs = "cc", k = i) +
+                 s(hms_n, DeployID, bs = "fs", xt=list(bs="cc", k = i)),
+               knots = list(hms_n = c(0,86400), 
+                            moon_phase_rads = c(min(dives_pop$moon_phase_rads),
+                                                max(dives_pop$moon_phase_rads))),
+               family = Gamma(link = "log"),
+               data = dives_temp,
+               select = T,
+               method = "REML")
+  
+  # draw the model 
+  d <- draw(gsmod, scales = "fixed")
+  dname <- paste0("temporal_gamm_wPcTagP09_depmod_pe_plots_k",i,".png")
+  ggsave(plot = d, filename = here("outputs","gamm_plots","tempmodel_kcheck_plots",dname),
+         width = 7, height = 7, units = "in")
+  
+  # print the gam.check output
+  gam.check(gsmod)
+}
+
+
 # save model object
-saveRDS(depth_gs, here("pipeline","gamm_models","temporal_gamms_allpops_depth_gs_2025Feb20.rds"))
+saveRDS(depth_gs, here("pipeline","gamm_models","temporal_gamms_allpops_depth_gs_2025Oct14.rds"))
 
 # compare both models
 AIC(depth_g, depth_gs) # gs model better fit 
@@ -167,7 +201,7 @@ draw(dur_g, scales = "fixed")
 gam.check(dur_g)
 
 # save model object
-saveRDS(dur_g, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_g_2025Feb20.rds"))
+saveRDS(dur_g, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_g_2025Oct14.rds"))
 
 ## 2. global smooth plus tag-specific smooths for time of day (similar penalties) ## 
 dur_gs <- gam(dur_secs ~ s(hms_n, bs = "cc", k = 5) +
@@ -192,8 +226,38 @@ appraise(dur_gs)
 draw(dur_gs, scales = "fixed")
 gam.check(dur_gs)
 
+# fit the same model with k = 5... 20 and save outputs to compare 
+for(i in 1:20){
+  # for testing 
+  #i = 5
+  
+  # print the k
+  print(paste0("k = ",i))
+  
+  # fit the model
+  gsmod <- gam(dur_secs ~ s(hms_n, bs = "cc", k = i) +
+                 s(moon_phase_rads, bs = "cc", k = i) +
+                 s(hms_n, DeployID, bs = "fs", xt=list(bs="cc", k = i)),
+               knots = list(hms_n = c(0,86400), 
+                            moon_phase_rads = c(min(dives_pop$moon_phase_rads),
+                                                max(dives_pop$moon_phase_rads))),
+               family = Gamma(link = "log"),
+               data = dives_temp,
+               select = T,
+               method = "REML")
+  
+  # draw the model 
+  d <- draw(gsmod, scales = "fixed")
+  dname <- paste0("temporal_gamm_wPcTagP09_durmod_pe_plots_k",i,".png")
+  ggsave(plot = d, filename = here("outputs","gamm_plots","tempmodel_kcheck_plots",dname),
+         width = 7, height = 7, units = "in")
+  
+  # print the gam.check output
+  gam.check(gsmod)
+}
+
 # save model object
-saveRDS(dur_gs, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_gs_2025Feb20.rds"))
+saveRDS(dur_gs, here("pipeline","gamm_models","temporal_gamms_allpops_dur_secs_gs_2025Oct14.rds"))
 
 # compare both models
 AIC(dur_g, dur_gs) # gs model better fit 
@@ -207,7 +271,7 @@ hp_dur_gs$hierarchical.partitioning
 
 ## read in cleaned and processed behavior log data for HOUR of day ## 
 hod <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_hod_2025Oct10.rds"))
 
 # get column for hour of the day
 hod$hod <- hour(hod$start_hst)
@@ -278,13 +342,15 @@ cor(preds) # all under 0.5
 
 # make DeployID a factor leveled by population
 rate_temp$DeployID <- factor(rate_temp$DeployID, levels = c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                                                            "PcTag074","PcTag035","PcTag037","PcTag049",
+                                                            "PcTag074","PcTag095","PcTag099","PcTag035","PcTag037",
+                                                            "PcTag049","PcTag096","PcTag097",
                                                             "PcTag090","PcTag092","PcTagP09"))
 
 summary(rate_temp$DeployID)
 
 # save data 
-saveRDS(rate_temp, here("pipeline","gamm_models","temporal_gamms_rate_model_data_2025Feb20.rds"))
+saveRDS(rate_temp, here("pipeline","gamm_models","temporal_gamms_rate_model_data_2025Oct14.rds"))
+rate_temp <- readRDS(here("pipeline","gamm_models","temporal_gamms_rate_model_data_2025Oct14.rds"))
 
 
 ## GAMM: hourly rate ~ temporal variables ## -------------------------------- ##
@@ -315,7 +381,7 @@ draw(rootogram(rate_g)) # recommended to look at this instead of standing histog
 gam.check(rate_g)
 
 # save model object 
-saveRDS(rate_g, here("pipeline","gamm_models","temporal_gamms_allpops_rate_g_2024Dec23.rds"))
+saveRDS(rate_g, here("pipeline","gamm_models","temporal_gamms_allpops_rate_g_2025Oct14.rds"))
 
 ## 2. factor-level smooths for hour of the day ## 
 rate_gs <- gam(n_dives ~ s(hod, bs = "cc", k = 5) +
@@ -342,10 +408,88 @@ appraise(rate_gs)
 draw(rootogram(rate_gs)) # recommended to look at this instead of standing histogram Kleiber & Zeilis 2016
 gam.check(rate_gs)
 
+# fit the same model with k = 5... 20 and save outputs to compare 
+for(i in 1:20){
+  # for testing 
+  #i = 5
+  
+  # print the k
+  print(paste0("k = ",i))
+  
+  # fit the model
+  gsmod <- gam(n_dives ~ s(hod, bs = "cc", k = i) +
+                 s(moon_phase_rads, bs = "cc", k = i) +
+                 s(hod, DeployID, bs = "fs", xt=list(bs="cc", k = i)) +
+                 offset(log(hrs)),
+               knots = list(hod = c(0,23), 
+                            moon_phase_rads = c(min(rate_temp$moon_phase_rads),
+                                                max(rate_temp$moon_phase_rads))),
+               family = nb(link = "log"),
+               select = T,
+               data = rate_temp,
+               method = "REML"
+  )
+  
+  # draw the model 
+  d <- draw(gsmod, scales = "fixed")
+  dname <- paste0("temporal_gamm_wPcTagP09_ratemod_pe_plots_k",i,".png")
+  ggsave(plot = d, filename = here("outputs","gamm_plots","tempmodel_kcheck_plots",dname),
+         width = 7, height = 7, units = "in")
+  
+  # print the gam.check output
+  gam.check(gsmod)
+}
+
+
 # save model object 
-saveRDS(rate_gs, here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Feb20.rds"))
+saveRDS(rate_gs, here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Oct14.rds"))
+rate_gs <- readRDS(here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Oct14.rds"))
+summary(rate_gs)
 
 # compare models 
 AIC(rate_g, rate_gs)
 
 # note: gam.hp doesn't have functionality to deal with models that have offsets
+
+
+## fit rate model without PcTagP09 ## ---------------------------------------- ##
+
+# remove PcTagP09
+rate_temp_sub <- filter(rate_temp, DeployID != "PcTagP09")
+
+# reorder factor 
+rate_temp_sub$DeployID <- factor(rate_temp_sub$DeployID, levels = c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
+                                                            "PcTag074","PcTag095","PcTag099","PcTag035","PcTag037",
+                                                            "PcTag049","PcTag096","PcTag097",
+                                                            "PcTag090","PcTag092"))
+
+# check
+summary(rate_temp_sub$DeployID)
+
+# fit the model
+rate_gs_sub <- gam(n_dives ~ s(hod, bs = "cc", k = 5) +
+                 s(moon_phase_rads, bs = "cc", k = 5) +
+                 s(hod, DeployID, bs = "fs", xt=list(bs="cc", k = 5)) +
+                 offset(log(hrs)),
+               knots = list(hod = c(0,23), 
+                            moon_phase_rads = c(min(rate_temp$moon_phase_rads),
+                                                max(rate_temp$moon_phase_rads))),
+               family = nb(link = "log"),
+               select = T,
+               data = rate_temp_sub,
+               method = "REML"
+)
+
+# review ACF and PACF plots 
+acf(resid(rate_gs_sub, type = "pearson")) 
+pacf(resid(rate_gs_sub, type = "pearson"))
+
+# review
+summary(rate_gs_sub)
+draw(rate_gs, scales = "fixed")
+appraise(rate_gs)
+draw(rootogram(rate_gs)) # recommended to look at this instead of standing histogram Kleiber & Zeilis 2016
+gam.check(rate_gs)
+
+# save model object 
+saveRDS(rate_gs, here("pipeline","gamm_models","temporal_gamms_allpops_rate_gs_2025Oct14.rds"))

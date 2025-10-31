@@ -1,7 +1,7 @@
 ## 02_splash_data_summaries.R: data summaries for SPLASH tags
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 01 Jun 2025
+## Updated: 18 Oct 2025
 
 ## --------------------------------------------------------------------------- ##
 
@@ -12,26 +12,28 @@ library(here)
 
 ## read in cleaned, processed behavior log data ## --------------------------- ##
 beh <- readRDS(here("pipeline","clean_data_for_analysis",
-                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Feb18.rds"))
+                    "all_behavlog_pseudotracks_rerouted20mIso_geoprocessed_split_tod_2025Oct17.rds"))
 
 # add population column 
 beh <- beh %>%
   mutate(
     population = case_when(
       DeployID %in% c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                      "PcTag074") ~ "MHI",
-      DeployID %in% c("PcTag035","PcTag037","PcTag049") ~ "NWHI",
+                      "PcTag074","PcTag095","PcTag099") ~ "MHI",
+      DeployID %in% c("PcTag035","PcTag037","PcTag049","PcTag096","PcTag097") ~ "NWHI",
       DeployID %in% c("PcTag090","PcTag092","PcTagP09") ~ "Open-ocean"
     )
   )
+
+unique(beh$population)
 
 # add sex column 
 beh <- beh %>%
   mutate(
     sex = case_when(
-      DeployID %in% c("PcTag026","PcTag032","PcTag055","PcTag035","PcTag037","PcTagP09") ~ "Male",
-      DeployID %in% c("PcTag090","PcTag092") ~ "Female",
-      DeployID %in% c("PcTag028","PcTag030","PcTag074","PcTag049") ~ "Unknown"
+      DeployID %in% c("PcTag026","PcTag032","PcTag055","PcTag035","PcTag037","PcTagP09","PcTag099") ~ "Male",
+      DeployID %in% c("PcTag090","PcTag092","PcTag095") ~ "Female",
+      DeployID %in% c("PcTag028","PcTag030","PcTag074","PcTag049","PcTag096","PcTag097") ~ "Unknown"
     )
   )
 
@@ -47,9 +49,11 @@ beh <- left_join(beh,fl[,c(1,5)], by = "DeployID")
 
 # make DeployID a factor leveled by population
 beh$DeployID <- factor(beh$DeployID, levels = c("PcTag026","PcTag028","PcTag030","PcTag032","PcTag055",
-                                                "PcTag074","PcTag035","PcTag037","PcTag049",
+                                                "PcTag074","PcTag095","PcTag099","PcTag035","PcTag037",
+                                                "PcTag049","PcTag096","PcTag097",
                                                 "PcTag090","PcTag092","PcTagP09"))
 
+summary(beh$DeployID)
 
 ## summary stats ## ---------------------------------------------------------- ##
 
@@ -67,10 +71,10 @@ tot_days <- beh %>%
     tot_hrs = sum(dur_hrs)
   )
 
-sum(tot_days$tot_days) # 138.3
-mean(tot_days$tot_days) # 11.5
+sum(tot_days$tot_days) # 201.1
+mean(tot_days$tot_days) # 12.6
 median(tot_days$tot_days) # 9.7
-range(tot_days$tot_days) # 3.8-20.1
+range(tot_days$tot_days) # 3.8-26.2
 
 # get the length of behavior log transmission duration (including gaps) for each
 # ID, as to calculate data coverage
@@ -122,9 +126,9 @@ prop <- left_join(tot_days, surf_days, by = "DeployID") %>%
     rate = n_dives/tot_hrs
   )
 
-median(prop$rate) #0.39
-mean(prop$rate) # 0.43
-range(prop$rate) # 0.12 - 0.75
+median(prop$rate) #0.40
+mean(prop$rate) # 0.45
+range(prop$rate) # 0.12 - 0.76
 range(prop$prop_surf) # 89.5 - 99%
 
 
@@ -145,6 +149,9 @@ dive_sum_id <- beh %>%
 
 range(dive_sum_id$med_depth) # 112-744
 range(dive_sum_id$med_dur) # 3.8-13.4
+
+new <- filter(dive_sum_id, DeployID %in% c("PcTag095","PcTag099",
+                                           "PcTag096","PcTag097"))
 
 
 # get means of these metrics across median values for individuals 
@@ -307,13 +314,40 @@ dive_c3_sum <- beh %>%
     cv_rate = sd(rate)/mean_rate
   )
 
+# summarize within cluster 1
+dive_c1_sum <- beh %>%
+  filter(What == "Dive") %>%
+  filter(DeployID %in% c("PcTag028","PcTag095","PcTag099")) %>%
+  group_by(DeployID) %>%
+  summarise(
+    mean_depth = mean(depth_avg50),
+    sd_depth = sd(depth_avg50),
+    med_depth = median(depth_avg50),
+    max_depth = max(depth_avg50),
+    mean_dur = mean(dur_mins),
+    sd_dur = sd(dur_mins),
+    med_dur = median(dur_mins),
+    max_dur = max(dur_mins)
+  ) %>%
+  left_join(., prop[,c(1,7)], by = "DeployID") %>%
+  summarise(
+    mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
+    cv_depth = sd(med_depth)/mean_depth,
+    mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
+    cv_dur = sd(med_dur)/mean_dur,
+    mean_rate = mean(rate),
+    sd_rate = sd(rate),
+    cv_rate = sd(rate)/mean_rate
+  )
 
 # subset dives and get overall values 
 dives <- filter(beh, What == "Dive")
-mean(dives$depth_avg50)
-sd(dives$depth_avg50)
-mean(dives$dur_mins)
-sd(dives$dur_mins)
+mean(dives$depth_avg50) # 272
+sd(dives$depth_avg50) # 248
+mean(dives$dur_mins) # 6.0
+sd(dives$dur_mins) # 3.1
 
 ## summarize surface durations. first need to collapse consecutive durations - ## 
 data <- beh
@@ -389,7 +423,6 @@ dives_space4km <- filter(beh, What == "Dive") %>%
   group_by(DeployID) %>%
   tally()
 
-
 ## dive metrics by time of day summary stats ## ------------------------------- ##
 
 # get dive rates and proportion of time at surface by time of day (table S3)
@@ -397,6 +430,18 @@ tot_dives_tod <- dives %>%
   group_by(DeployID, tod) %>%
   summarise(
     tot_dives = n()
+  )
+
+tot_dives_tod %>%
+  group_by(tod) %>%
+  summarise(n = sum(tot_dives))
+
+grand_dives_tod <- tot_dives_tod %>%
+  group_by(tod) %>%
+  summarise(
+    mean_n = mean(tot_dives),
+    sd_n = sd(tot_dives),
+    cv_n = sd_n/mean_n
   )
 
 tot_surf_tod <- beh %>%
@@ -438,7 +483,7 @@ merge_tod <- left_join(tot_hr_tod, tot_dives_tod, by = c("DeployID", "tod")) %>%
          prop_v = (V/tot_dives)*100)
 
 # save for later
-saveRDS(merge_tod, here("pipeline","dive_rates_by_tod_by_id_2025Feb24.rds"))
+saveRDS(merge_tod, here("pipeline","dive_rates_by_tod_by_id_2025Oct10.rds"))
 
 # dive metrics by time of day (diel period)
 dive_tod_sum <- beh %>%
@@ -458,18 +503,25 @@ dive_tod_sum <- beh %>%
   group_by(tod) %>%
   summarise(
     mean_depth = mean(med_depth),
+    sd_depth = sd(med_depth),
     cv_depth = sd(med_depth)/mean_depth,
     mean_dur = mean(med_dur),
+    sd_dur = sd(med_dur),
     cv_dur = sd(med_dur)/mean_dur,
     mean_rate = mean(rate),
+    sd_rate = sd(rate),
     cv_rate = sd(rate)/mean_rate,
     mean_surf = mean(prop_surf),
+    sd_surf = sd(prop_surf),
     cv_surf = sd(prop_surf)/mean_surf,
     mean_sq = mean(prop_sq),
+    sd_sq = sd(prop_sq),
     cv_sq = sd(prop_sq)/mean_sq,
     mean_u = mean(prop_u),
+    sd_u = sd(prop_u),
     cv_u = sd(prop_u)/mean_u,
     mean_v = mean(prop_v),
+    sd_v = sd(prop_v),
     cv_v = sd(prop_v)/mean_v
   )
 
@@ -478,10 +530,19 @@ cor(dives$depth_avg50, dives$dur_mins, method = "spearman") # 0.72
 
 ## fin base length summaries ## ---------------------------------------------- ##
 
+# first join med depth and med duration to fin base length
+fl2 <- left_join(fl, dive_sum_id, by = "DeployID")
+
 # pearson's correlation between median dive depth and fin base length
-cor(dive_sum_id$med_depth, fl$fin_base, method = "spearman") # 0.36
-cor(dive_sum_id$med_dur, fl$fin_base, method = "spearman") # 0.37
+cor(fl2$med_depth, fl2$fin_base, method = "spearman") # 0.45
+cor(fl2$med_dur, fl2$fin_base, method = "spearman") # 0.46
+
+# remove PcTag095 and run the stats again
+fl3 <- filter(fl2, DeployID != "PcTag095")
+cor(fl3$med_depth, fl3$fin_base, method = "spearman") # 0.39
+cor(fl3$med_dur, fl3$fin_base, method = "spearman") # 0.38
+
 
 ## save data objects for use in visualizations later ## ---------------------- ##
-save(dives, merge_tod, file = here("pipeline","splash_data_summary_objects_for_figures_2025Apr29.RData"))
+save(dives, merge_tod, file = here("pipeline","splash_data_summary_objects_for_figures_2025Oct10.RData"))
 

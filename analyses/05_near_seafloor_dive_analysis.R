@@ -2,7 +2,7 @@
 ## insular animals 
 
 ## Author: Michaela A. Kratofil, Oregon State University, Cascadia Research
-## Updated: 29 Apr 2025
+## Updated: 19 Oct 2025
 
 ## -------------------------------------------------------------------------- ##
 
@@ -13,7 +13,7 @@ library(here)
 
 ## read in imputed tracks ## ------------------------------------------------- ##
 imputes <- readRDS(here("pipeline","geoprocessed",
-                        "all_behavlog_pseudotracks_20imputes_rerouted20mIso_geoprocessed_seafloor_2025Feb23.rds"))
+                        "all_behavlog_pseudotracks_20imputes_rerouted20mIso_geoprocessed_seafloor_2025Oct19.rds"))
 imputes
 
 # review
@@ -85,10 +85,18 @@ dives <- dives %>%
   ungroup()
 
 # read in the dive IDs that should be included (4km error gap)
-err_ids <- readRDS(here("pipeline","fkw_dive_ids_4kmerror_for_seafloor_analysis.rds"))
+err_ids <- readRDS(here("pipeline","fkw_dive_ids_4kmerror_for_seafloor_analysis_2025Oct19.rds"))
+
+# err_ids for insular animals (get tally)
+err_ids %>%
+  filter(., DeployID != "PcTag090") %>%
+  filter(., DeployID != "PcTag092") %>%
+  filter(., DeployID != "PcTagP09")  %>%
+  tally()
+
 
 # filter for those dives within the error criteria
-dives_sub <- filter(dives, start_utc %in% err_ids$start_utc)
+dives_sub <- filter(dives, dive_id2 %in% err_ids$dive_id2)
 
 # check that there's an equal number of dives per id and imputed track 
 dives_chk <- dives_sub %>%
@@ -104,16 +112,33 @@ dives_id <- dives_sub %>%
 # reassign object (easier)
 dives <- dives_sub
 
+# see if there are dives that are nans all around
+nans <- filter(dives, is.na(depthH) & is.na(depthM) & is.na(depthL)) # nope
+
 # create a new column for depth of insular animals, using the MHI and NWHI grids
-# adjust depths of those just overlapping with -20m isobath grid cells
+# adjust depths of those just overlapping with -20m isobath grid cells. if point
+# occurs in location where neither the MHI or NWHI grids had data, then use the
+# GEBCO depth
 dives <- dives %>%
   mutate(
-    ins_depth = ifelse(is.na(depthM), depthH, depthM),
-    ins_depth = ifelse(is.na(ins_depth), depthL, ins_depth),
-    sfdepth = ifelse(ins_depth > -20 | is.na(ins_depth), -20, ins_depth),
-    ins_slope = ifelse(is.na(slopeM), slopeH, slopeM),
-    ins_slope = ifelse(is.na(ins_slope), slopeL, ins_slope)
+    ins_depth = case_when(
+      is.na(depthM) & !is.na(depthH) ~ depthH,
+      is.na(depthM) & is.na(depthH) ~ depthL,
+      is.na(depthH) & !is.na(depthM) ~ depthM,
+      TRUE ~ depthH
+    ),
+    ins_slope = case_when(
+      is.na(slopeM) & !is.na(slopeH) ~ slopeH,
+      is.na(slopeM) & is.na(slopeH) ~ slopeL,
+      is.na(slopeH) & !is.na(slopeM) ~ slopeM,
+      TRUE ~ slopeH
+    ),
+    sfdepth = ifelse(ins_depth > -20, -20, ins_depth)
   )
+
+summary(dives$ins_depth)
+summary(dives$sfdepth)
+summary(dives$ins_slope)
 
 ## isolate and summarize near seafloor dives ## ------------------------------ ##
 
@@ -134,15 +159,17 @@ dive_sf_sum <- dives %>%
     depth_diff_med = median_sf - dive_depth,
     depth_diff_mean = mean_sf - dive_depth,
     depth_diff_max = max_sf - dive_depth,
+    prop_dive_sf = dive_depth/max_sf,
     mean_slope = mean(ins_slope),
     median_slope = median(ins_slope),
+    sd_slope = sd(ins_slope),
     min_slope = min(ins_slope),
     max_slope = max(ins_slope)
   )
 
 # save
 write.csv(dive_sf_sum, here("outputs","summary_files",
-                            "mhi_nwhi_dives_all_seafloor_summary_byID_bydive_2025Feb25.csv"), row.names = F)
+                            "mhi_nwhi_dives_all_seafloor_summary_byID_bydive_2025Oct19.csv"), row.names = F)
 
 
 # isolate dives that have standard deviation in seafloor depth < 100 m, and a
@@ -150,13 +177,20 @@ write.csv(dive_sf_sum, here("outputs","summary_files",
 dives_100sd <- filter(dive_sf_sum, sd_sf <= 100) %>%
   filter(., depth_diff_max <= 100)
 
+dives_100sd_abs <- filter(dive_sf_sum, sd_sf <= 100) %>%
+  filter(., abs(depth_diff_max) <= 100)
+
+# four dives that are excluded when using absolute value. upon review, one of these
+# dives fits criteria (others are more uncertain); include this one 
+dives_100sd_abs <- bind_rows(dives_100sd_abs, dives_100sd[5,])
+
 # save
-write.csv(dives_100sd, here("outputs","summary_files",
-                            "mhi_nwhi_dives_sd100m_depthdiff100m_seafloor_summary_byID_bydive_2025Feb25.csv"), row.names = F)
+write.csv(dives_100sd_abs, here("outputs","summary_files",
+                            "mhi_nwhi_dives_sd100m_absdepthdiff100m_seafloor_summary_byID_bydive_2025Oct19.csv"), row.names = F)
 
 
 # summarize the number of these dives by ID 
-dd_sd100_sum <- dives_100sd %>%
+dd_sd100_sum <- dives_100sd_abs %>%
   group_by(DeployID) %>%
   summarise(
     n_sd100 = n(),
@@ -165,6 +199,11 @@ dd_sd100_sum <- dives_100sd %>%
     sd_dd = sd(dive_depth),
     min_dd = min(dive_depth),
     max_dd = max(dive_depth),
+    mean_prop = mean(prop_dive_sf),
+    median_prop = median(prop_dive_sf),
+    sd_prop = sd(prop_dive_sf),
+    min_prop = min(prop_dive_sf),
+    max_prop = max(prop_dive_sf),
     mean_du = mean(dive_dur),
     median_du = median(dive_dur),
     min_du = min(dive_dur),
@@ -180,14 +219,14 @@ dd_sd100_sum <- dives_100sd %>%
     max_slope = max(max_slope)
   )
 write.csv(dd_sd100_sum, here("outputs","summary_files",
-                             "mhi_nwhi_probable_seafloor_dives_summary_byID_2025Feb25.csv"), row.names = F)
+                             "mhi_nwhi_probable_seafloor_dives_summary_byID_2025Oct19.csv"), row.names = F)
 
 # get mean of medians 
 mean(dd_sd100_sum$median_dd)
 mean(dd_sd100_sum$median_du)
 
 # get the number of dives within SD 100 by dive shape 
-dd_sd100_shp <- dives_100sd %>%
+dd_sd100_shp <- dives_100sd_abs %>%
   group_by(DeployID, dive_shape) %>%
   summarise(
     n = n()
@@ -197,7 +236,7 @@ dd_sd100_shp <- dives_100sd %>%
 
 
 # summary by time of day
-dd_dive_sum_tod <- dives_100sd %>%
+dd_dive_sum_tod <- dives_100sd_abs %>%
   mutate(
     tod = factor(tod, levels = c("dawn","day","dusk","night"))
   ) %>%
@@ -205,10 +244,11 @@ dd_dive_sum_tod <- dives_100sd %>%
   summarise(
     n = n()
   ) %>%
-  tidyr::pivot_wider(names_from = tod, values_from = n) #%>%
+  tidyr::pivot_wider(names_from = tod, values_from = n) %>%
+  dplyr::select(DeployID, dawn, day, dusk, night)
 
 # get the long format 
-dd_dive_sum_tod_l <- dives_100sd %>%
+dd_dive_sum_tod_l <- dives_100sd_abs %>%
   mutate(
     tod = factor(tod, levels = c("dawn","day","dusk","night"))
   ) %>%
@@ -218,7 +258,7 @@ dd_dive_sum_tod_l <- dives_100sd %>%
   )
 
 # read in the total dive rate metrics by diel period (time of day/tod)
-merge_tod <- readRDS(here("pipeline","dive_rates_by_tod_by_id_2025Feb24.rds"))
+merge_tod <- readRDS(here("pipeline","dive_rates_by_tod_by_id_2025Oct10.rds"))
 
 # estimate seafloor dive rate by diel period using the total hours of behavior
 # data
@@ -243,5 +283,5 @@ merge_tod_sum <- merge_tod2 %>%
   ) 
 
 # save objects for plotting later 
-save(dive_sf_sum, dives_100sd, merge_tod2, imputes, dives, file =
-     here("pipeline","data_objects_for_seafloor_dives_analysis_2025Apr29.RData"))
+save(dive_sf_sum, dives_100sd_abs, merge_tod2, imputes, dives, file =
+     here("pipeline","data_objects_for_seafloor_dives_analysis_2025Oct19.RData"))
